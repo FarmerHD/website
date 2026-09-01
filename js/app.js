@@ -147,16 +147,17 @@ function App() {
           ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
         </main>
 
-        <div class="legal-bar">
-          <a href="impressum.html">Impressum</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a>
-        </div>
-
         <nav class="tabbar">
-          ${TABS.map((t) => html`
-            <button key=${t.key} class="tabbar-item ${tab === t.key ? "active" : ""}" onClick=${() => setTab(t.key)}>
-              <${t.icon} strokeWidth="2" /> ${t.label}
-            </button>
-          `)}
+          <div class="tabbar-row">
+            ${TABS.map((t) => html`
+              <button key=${t.key} class="tabbar-item ${tab === t.key ? "active" : ""}" onClick=${() => setTab(t.key)}>
+                <${t.icon} strokeWidth="2" /> ${t.label}
+              </button>
+            `)}
+          </div>
+          <div class="tabbar-legal">
+            <a href="impressum.html">Impressum</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a>
+          </div>
         </nav>
       </div>
 

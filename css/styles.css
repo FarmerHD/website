@@ -54,8 +54,7 @@
 
   --nav-w: 248px;
   --header-h: 64px;
-  --tabbar-h: 68px;
-  --legal-bar-h: 32px;
+  --tabbar-h: 82px;
 
   /* Warengruppen- / Kategorie-Akzente */
   --tag-1: #B4772A; /* Honig/Frühstück */
@@ -159,36 +158,36 @@ body{
   width:100%;
   max-width:1080px;
   margin:0 auto;
-  padding:16px 16px calc(var(--tabbar-h) + var(--legal-bar-h) + 28px);
+  padding:16px 16px calc(var(--tabbar-h) + 28px);
 }
-
-/* Impressum/Datenschutz (mobil): ein einziger fester Streifen über der
-   Tab-Leiste statt am Ende jeder einzelnen Ansicht — von jeder Ansicht aus
-   erreichbar (Impressumspflicht), ohne bei jedem Tab erneut durchgescrollt
-   werden zu müssen. Auf Desktop übernimmt der Sidebar-Link diese Aufgabe. */
-.legal-bar{
-  position:fixed;left:0;right:0;bottom:var(--tabbar-h);z-index:29;
-  display:flex;justify-content:center;align-items:center;gap:8px;
-  height:var(--legal-bar-h);
-  background:var(--paper);
-  border-top:1px solid var(--border);
-  font-size:11.5px;
-}
-.legal-bar a{color:var(--ink-faint);text-decoration:none;font-weight:500}
-.legal-bar a:hover{color:var(--primary)}
-.legal-bar .sep{color:var(--border-strong)}
 
 /* Bottom tab bar (mobile) */
 .tabbar{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
-  display:flex;
+  display:flex;flex-direction:column;
   min-height:var(--tabbar-h);
   box-sizing:border-box;
   background: var(--paper);
   border-top:1px solid var(--border);
-  padding:6px 6px calc(6px + env(safe-area-inset-bottom));
   box-shadow: 0 -6px 20px -10px rgba(34,30,25,.15);
 }
+.tabbar-row{
+  display:flex;
+  padding:6px 6px 5px;
+}
+/* Impressum/Datenschutz (mobil): eine winzige Zeile ganz unten in der
+   Tab-Leiste statt eines eigenen, auffälligen Balkens darüber — von jeder
+   Ansicht aus erreichbar (Impressumspflicht), aber bewusst unauffällig.
+   Auf Desktop übernimmt der Sidebar-Link diese Aufgabe. */
+.tabbar-legal{
+  display:flex;justify-content:center;gap:7px;
+  padding:0 0 calc(4px + env(safe-area-inset-bottom));
+  font-size:10px;
+  opacity:.65;
+}
+.tabbar-legal a{color:var(--ink-faint);text-decoration:none}
+.tabbar-legal a:hover{color:var(--primary)}
+.tabbar-legal .sep{color:var(--border-strong)}
 .tabbar-item{
   flex:1;
   display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -241,7 +240,6 @@ body{
   .sidebar-link.active{background:var(--primary-soft);color:var(--primary-dark)}
   .sidebar-foot{padding:14px 20px 4px;display:flex;flex-direction:column;gap:10px}
   .tabbar{display:none}
-  .legal-bar{display:none}
   .view-container{padding:28px 32px 40px}
   .topbar{display:none}
   .desktop-header{
@@ -615,7 +613,7 @@ input[type="checkbox"].check:checked::after{
 
 .print-only{display:none}
 @media print{
-  .sidebar,.tabbar,.legal-bar,.topbar,.fab,.filter-bar,.add-item-form,.shop-item-actions,.toast-stack,.desktop-header .btn,.shop-actions{display:none !important}
+  .sidebar,.tabbar,.topbar,.fab,.filter-bar,.add-item-form,.shop-item-actions,.toast-stack,.desktop-header .btn,.shop-actions{display:none !important}
   body{background:#fff}
   .view-container{padding:0;max-width:none}
   .shop-item{border:none;border-bottom:1px solid #ddd;border-radius:0;padding:8px 0}
