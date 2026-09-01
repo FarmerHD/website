@@ -75,7 +75,7 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
     }
     : emptyForm());
   const [importText, setImportText] = useState("");
-  const [importOpen, setImportOpen] = useState(!isEdit);
+  const [importOpen, setImportOpen] = useState(false);
   const [importHint, setImportHint] = useState(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
