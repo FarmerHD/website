@@ -55,6 +55,7 @@
   --nav-w: 248px;
   --header-h: 64px;
   --tabbar-h: 68px;
+  --legal-bar-h: 32px;
 
   /* Warengruppen- / Kategorie-Akzente */
   --tag-1: #B4772A; /* Honig/Frühstück */
@@ -158,13 +159,31 @@ body{
   width:100%;
   max-width:1080px;
   margin:0 auto;
-  padding:16px 16px calc(var(--tabbar-h) + 28px);
+  padding:16px 16px calc(var(--tabbar-h) + var(--legal-bar-h) + 28px);
 }
+
+/* Impressum/Datenschutz (mobil): ein einziger fester Streifen über der
+   Tab-Leiste statt am Ende jeder einzelnen Ansicht — von jeder Ansicht aus
+   erreichbar (Impressumspflicht), ohne bei jedem Tab erneut durchgescrollt
+   werden zu müssen. Auf Desktop übernimmt der Sidebar-Link diese Aufgabe. */
+.legal-bar{
+  position:fixed;left:0;right:0;bottom:var(--tabbar-h);z-index:29;
+  display:flex;justify-content:center;align-items:center;gap:8px;
+  height:var(--legal-bar-h);
+  background:var(--paper);
+  border-top:1px solid var(--border);
+  font-size:11.5px;
+}
+.legal-bar a{color:var(--ink-faint);text-decoration:none;font-weight:500}
+.legal-bar a:hover{color:var(--primary)}
+.legal-bar .sep{color:var(--border-strong)}
 
 /* Bottom tab bar (mobile) */
 .tabbar{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
   display:flex;
+  min-height:var(--tabbar-h);
+  box-sizing:border-box;
   background: var(--paper);
   border-top:1px solid var(--border);
   padding:6px 6px calc(6px + env(safe-area-inset-bottom));
@@ -222,6 +241,7 @@ body{
   .sidebar-link.active{background:var(--primary-soft);color:var(--primary-dark)}
   .sidebar-foot{padding:14px 20px 4px;display:flex;flex-direction:column;gap:10px}
   .tabbar{display:none}
+  .legal-bar{display:none}
   .view-container{padding:28px 32px 40px}
   .topbar{display:none}
   .desktop-header{
@@ -595,7 +615,7 @@ input[type="checkbox"].check:checked::after{
 
 .print-only{display:none}
 @media print{
-  .sidebar,.tabbar,.topbar,.fab,.filter-bar,.add-item-form,.shop-item-actions,.toast-stack,.desktop-header .btn,.shop-actions{display:none !important}
+  .sidebar,.tabbar,.legal-bar,.topbar,.fab,.filter-bar,.add-item-form,.shop-item-actions,.toast-stack,.desktop-header .btn,.shop-actions{display:none !important}
   body{background:#fff}
   .view-container{padding:0;max-width:none}
   .shop-item{border:none;border-bottom:1px solid #ddd;border-radius:0;padding:8px 0}
@@ -620,7 +640,3 @@ input[type="checkbox"].check:checked::after{
 .site-footer{text-align:center;padding:26px 16px 36px;color:var(--ink-faint);font-size:12.5px}
 .site-footer a{color:var(--ink-soft);text-decoration:none;margin:0 9px;font-weight:500}
 .site-footer a:hover{color:var(--primary)}
-/* Auf Desktop übernimmt der permanente Sidebar-Link diese Pflicht (Impressum
-   muss von jeder Ansicht erreichbar sein, nicht auf jeder Ansicht wiederholt
-   werden) — auf Mobil gibt es keine Sidebar, dort bleibt der Footer nötig. */
-@media (min-width:960px){.content-footer{display:none}}

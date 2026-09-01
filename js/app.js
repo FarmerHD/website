@@ -145,10 +145,11 @@ function App() {
           ${tab === "plan" && html`<${PlanView} ...${viewProps} />`}
           ${tab === "shopping" && html`<${ShoppingView} ...${viewProps} />`}
           ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
-          <footer class="site-footer content-footer">
-            <a href="impressum.html">Impressum</a><span style="color:var(--border-strong)">|</span><a href="datenschutz.html">Datenschutz</a>
-          </footer>
         </main>
+
+        <div class="legal-bar">
+          <a href="impressum.html">Impressum</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a>
+        </div>
 
         <nav class="tabbar">
           ${TABS.map((t) => html`
