@@ -1,6 +1,6 @@
 import { html, useState, useEffect } from "./lib/preact.js";
 import { supabaseClient as sb } from "./config.js";
-import { IconMail, IconLock, IconLeaf, IconArrowLeft } from "./lib/icons.js";
+import { IconLock, IconLeaf, IconArrowLeft } from "./lib/icons.js";
 
 export function useAuth() {
   const [session, setSession] = useState(undefined); // undefined = lädt noch
@@ -19,7 +19,6 @@ export function useAuth() {
 }
 
 const MODE_PASSWORD = "password";
-const MODE_MAGIC = "magic";
 const MODE_FORGOT = "forgot";
 
 export function AuthScreen() {
@@ -35,15 +34,6 @@ export function AuthScreen() {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) setMsg({ type: "error", text: "Anmeldung fehlgeschlagen: " + error.message });
-  }
-
-  async function submitMagic(e) {
-    e.preventDefault();
-    setBusy(true); setMsg(null);
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
-    setBusy(false);
-    if (error) setMsg({ type: "error", text: "Konnte Link nicht senden: " + error.message });
-    else setMsg({ type: "success", text: "Login-Link wurde an " + email + " gesendet. Bitte E-Mails prüfen." });
   }
 
   async function submitForgot(e) {
@@ -64,13 +54,6 @@ export function AuthScreen() {
           <p>Private Rezeptverwaltung, Wochenplan & Einkaufsliste</p>
         </div>
 
-        ${mode !== MODE_FORGOT && html`
-          <div class="auth-tabs">
-            <button class=${mode === MODE_PASSWORD ? "active" : ""} onClick=${() => { setMode(MODE_PASSWORD); setMsg(null); }}>Passwort</button>
-            <button class=${mode === MODE_MAGIC ? "active" : ""} onClick=${() => { setMode(MODE_MAGIC); setMsg(null); }}>Login-Link</button>
-          </div>
-        `}
-
         ${msg && html`<div class="auth-msg ${msg.type}">${msg.text}</div>`}
 
         ${mode === MODE_FORGOT && html`
@@ -80,7 +63,7 @@ export function AuthScreen() {
           <form onSubmit=${submitForgot}>
             <div class="field">
               <label>E-Mail-Adresse</label>
-              <input class="input" type="email" required value=${email} onInput=${(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" />
+              <input class="input" type="email" required value=${email} onInput=${(e) => setEmail(e.target.value)} />
             </div>
             <button class="btn btn-primary btn-block" type="submit" disabled=${busy}>Link zum Zurücksetzen senden</button>
           </form>
@@ -90,26 +73,16 @@ export function AuthScreen() {
           <form onSubmit=${submitPassword}>
             <div class="field">
               <label>E-Mail-Adresse</label>
-              <input class="input" type="email" required value=${email} onInput=${(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" />
+              <input class="input" type="email" required value=${email} onInput=${(e) => setEmail(e.target.value)} />
             </div>
             <div class="field">
               <label>Passwort</label>
-              <input class="input" type="password" required value=${password} onInput=${(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              <input class="input" type="password" required value=${password} onInput=${(e) => setPassword(e.target.value)} />
             </div>
             <button class="btn btn-primary btn-block" type="submit" disabled=${busy}>Anmelden</button>
             <div class="auth-foot">
               <button type="button" class="btn-link" onClick=${() => { setMode(MODE_FORGOT); setMsg(null); }}>Passwort vergessen?</button>
             </div>
-          </form>
-        `}
-
-        ${mode === MODE_MAGIC && html`
-          <form onSubmit=${submitMagic}>
-            <div class="field">
-              <label>E-Mail-Adresse</label>
-              <input class="input" type="email" required value=${email} onInput=${(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" />
-            </div>
-            <button class="btn btn-primary btn-block" type="submit" disabled=${busy}><${IconMail} strokeWidth="2.2" /> Login-Link senden</button>
           </form>
         `}
       </div>
@@ -146,12 +119,12 @@ export function SetNewPasswordScreen({ onDone }) {
         ${msg && html`<div class="auth-msg ${msg.type}">${msg.text}</div>`}
         <form onSubmit=${submit}>
           <div class="field">
-            <label>Neues Passwort</label>
-            <input class="input" type="password" required value=${password} onInput=${(e) => setPassword(e.target.value)} placeholder="mind. 8 Zeichen" />
+            <label>Neues Passwort (mind. 8 Zeichen)</label>
+            <input class="input" type="password" required value=${password} onInput=${(e) => setPassword(e.target.value)} />
           </div>
           <div class="field">
             <label>Passwort bestätigen</label>
-            <input class="input" type="password" required value=${confirm} onInput=${(e) => setConfirm(e.target.value)} placeholder="••••••••" />
+            <input class="input" type="password" required value=${confirm} onInput=${(e) => setConfirm(e.target.value)} />
           </div>
           <button class="btn btn-primary btn-block" type="submit" disabled=${busy}>Passwort speichern</button>
         </form>
