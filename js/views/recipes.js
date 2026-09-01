@@ -48,7 +48,7 @@ function IngredientEditor({ ingredients, onChange }) {
           <select class="select" value=${row.unit} onChange=${(e) => update(i, { unit: e.target.value })}>
             ${UNITS.map((u) => html`<option value=${u}>${u}</option>`)}
           </select>
-          <button type="button" class="btn btn-icon btn-ghost" onClick=${() => remove(i)} aria-label="Zutat entfernen"><${IconX} strokeWidth="2.2" /></button>
+          <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Zutat entfernen"><${IconX} strokeWidth="3" /></button>
         </div>
       `)}
       <button type="button" class="btn btn-secondary btn-sm" onClick=${add}><${IconPlus} strokeWidth="2.4" /> Zutat hinzufügen</button>
