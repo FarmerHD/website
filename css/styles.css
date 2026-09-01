@@ -527,14 +527,25 @@ input[type="checkbox"].check:checked::after{
 .plan-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .plan-list{display:flex;flex-direction:column;gap:8px}
 .plan-row{
-  display:flex;align-items:center;gap:12px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   background:var(--paper);border:1px solid var(--border);border-radius:var(--radius-sm);
   padding:11px 13px;
 }
-.plan-row.selected{border-color:var(--primary);background:var(--primary-mist)}
+.plan-row.selected{border-color:var(--primary)}
 .plan-row-name{flex:1;min-width:0}
 .plan-row-name .n{font-weight:600;font-size:14.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .plan-row-name .c{font-size:12px;color:var(--ink-soft)}
+.plan-row-controls{display:flex;gap:10px;align-items:center}
+@media (max-width:639px){
+  .plan-row-controls{flex-basis:100%;justify-content:space-between;margin-top:4px}
+}
+.plan-weekday-select{width:auto;min-width:132px;padding-top:8px;padding-bottom:8px;font-size:13.5px}
+.plan-weekday-badge{
+  display:inline-flex;align-items:center;
+  padding:3px 9px;border-radius:var(--radius-pill);
+  font-size:11px;font-weight:700;letter-spacing:.02em;
+  background:var(--primary-soft);color:var(--primary-dark);
+}
 
 /* ============================================================
    Einkaufsliste
@@ -603,3 +614,7 @@ input[type="checkbox"].check:checked::after{
 .site-footer{text-align:center;padding:26px 16px 36px;color:var(--ink-faint);font-size:12.5px}
 .site-footer a{color:var(--ink-soft);text-decoration:none;margin:0 9px;font-weight:500}
 .site-footer a:hover{color:var(--primary)}
+/* Auf Desktop übernimmt der permanente Sidebar-Link diese Pflicht (Impressum
+   muss von jeder Ansicht erreichbar sein, nicht auf jeder Ansicht wiederholt
+   werden) — auf Mobil gibt es keine Sidebar, dort bleibt der Footer nötig. */
+@media (min-width:960px){.content-footer{display:none}}

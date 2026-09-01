@@ -1,7 +1,7 @@
 import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { mergeLines, canMerge, mergedAmountUnit } from "../lib/categorize.js";
-import { CATEGORY_STYLE } from "../lib/constants.js";
+import { CATEGORY_STYLE, WEEKDAYS, WEEKDAY_SHORT } from "../lib/constants.js";
 import { IconX, IconCart, IconCalendar } from "../lib/icons.js";
 
 export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, showToast, goToShopping, userId }) {
@@ -9,17 +9,21 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
 
   const rows = useMemo(() => recipes.map((r) => {
     const p = planItems.find((pi) => pi.recipe_id === r.id);
-    return { recipe: r, selected: p ? p.selected : false, portions: p ? p.portions : r.portions };
+    return { recipe: r, selected: p ? p.selected : false, portions: p ? p.portions : r.portions, weekday: p ? p.weekday || "" : "" };
   }), [recipes, planItems]);
 
-  const selectedRows = rows.filter((r) => r.selected);
+  const selectedRows = [...rows.filter((r) => r.selected)].sort((a, b) => {
+    const ia = a.weekday ? WEEKDAYS.indexOf(a.weekday) : 99;
+    const ib = b.weekday ? WEEKDAYS.indexOf(b.weekday) : 99;
+    return ia - ib;
+  });
   const totalPortions = selectedRows.reduce((sum, r) => sum + (Number(r.portions) || 0), 0);
 
   async function upsertPlan(recipeId, patch) {
     const existing = planItems.find((p) => p.recipe_id === recipeId);
-    const base = existing || { recipe_id: recipeId, portions: recipes.find((r) => r.id === recipeId)?.portions || 4, selected: false };
+    const base = existing || { recipe_id: recipeId, portions: recipes.find((r) => r.id === recipeId)?.portions || 4, selected: false, weekday: "" };
     const next = { ...base, ...patch };
-    const payload = { recipe_id: recipeId, user_id: userId, selected: next.selected, portions: next.portions };
+    const payload = { recipe_id: recipeId, user_id: userId, selected: next.selected, portions: next.portions, weekday: next.weekday || null };
     onPlanChange(existing ? planItems.map((p) => (p.recipe_id === recipeId ? next : p)) : [...planItems, next]);
     const { error } = await write("plan_items", "upsert", payload);
     if (error) showToast("Konnte Planung nicht speichern: " + error.message, "error");
@@ -32,6 +36,10 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
 
   function setPortions(recipeId, portions) {
     upsertPlan(recipeId, { portions: Math.max(1, portions) });
+  }
+
+  function setWeekday(recipeId, weekday) {
+    upsertPlan(recipeId, { weekday });
   }
 
   async function generateShoppingList() {
@@ -88,8 +96,9 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
         </div>
         ${selectedRows.length > 0 && html`
           <div class="plan-chips">
-            ${selectedRows.map(({ recipe, portions }) => html`
+            ${selectedRows.map(({ recipe, portions, weekday }) => html`
               <span class="chip" key=${recipe.id}>
+                ${weekday && html`<span class="plan-weekday-badge">${WEEKDAY_SHORT[weekday]}</span>`}
                 ${recipe.name} · ${portions}×
                 <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
               </span>
@@ -109,7 +118,7 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
         </div>
       ` : html`
         <div class="plan-list">
-          ${rows.map(({ recipe, selected, portions }) => html`
+          ${rows.map(({ recipe, selected, portions, weekday }) => html`
             <div class="plan-row ${selected ? "selected" : ""}" key=${recipe.id}>
               <label class="checkbox-row" style="flex:0">
                 <input type="checkbox" class="check" checked=${selected} onChange=${() => toggle(recipe)} />
@@ -119,10 +128,16 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
                 <span class="c" style="color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</span>
               </div>
               ${selected && html`
-                <div class="stepper">
-                  <button type="button" onClick=${() => setPortions(recipe.id, portions - 1)}>−</button>
-                  <span class="stepper-val">${portions}</span>
-                  <button type="button" onClick=${() => setPortions(recipe.id, portions + 1)}>+</button>
+                <div class="plan-row-controls">
+                  <select class="select plan-weekday-select" value=${weekday} onChange=${(e) => setWeekday(recipe.id, e.target.value)}>
+                    <option value="">Kein Tag</option>
+                    ${WEEKDAYS.map((d) => html`<option value=${d}>${d}</option>`)}
+                  </select>
+                  <div class="stepper">
+                    <button type="button" onClick=${() => setPortions(recipe.id, portions - 1)}>−</button>
+                    <span class="stepper-val">${portions}</span>
+                    <button type="button" onClick=${() => setPortions(recipe.id, portions + 1)}>+</button>
+                  </div>
                 </div>
               `}
             </div>

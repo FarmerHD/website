@@ -24,6 +24,14 @@ export const CATEGORY_STYLE = {
 
 export const UNITS = ["g", "kg", "ml", "l", "Stück", "EL", "TL"];
 
+// Wochentage für die Zuordnung im Wochenplan.
+export const WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+export const WEEKDAY_SHORT = {
+  "Montag": "Mo", "Dienstag": "Di", "Mittwoch": "Mi", "Donnerstag": "Do",
+  "Freitag": "Fr", "Samstag": "Sa", "Sonntag": "So",
+};
+
 // Lagerorte für den Vorrat, auf Wunsch fest vorgegeben.
 export const PANTRY_LOCATIONS = ["Kühlschrank", "Gefrierschrank", "Keller", "Küche", "Sonstiges"];
 
