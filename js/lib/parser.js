@@ -68,6 +68,39 @@ function parseIngredientLine(rawLine) {
   };
 }
 
+// Zerlegt einen Zubereitungstext in einzelne Schritte. Durch Leerzeilen
+// getrennte Absätze zählen als je ein Schritt; ohne Leerzeilen werden
+// durchnummerierte/mit Bullet versehene Zeilen gruppiert; gibt es gar
+// keine Nummerierung, wird jede nicht-leere Zeile als eigener Schritt
+// behandelt (der häufigste Fall bei zeilenweise, aber ohne Leerzeilen
+// kopierten Zubereitungsschritten — sonst würde alles in einem einzigen
+// Schritt landen).
+export function splitStepsText(text) {
+  const normalized = (text || "").replace(/\r\n/g, "\n");
+  const paragraphs = normalized.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length > 1) {
+    return paragraphs
+      .map((p) => p.split("\n").map((l) => l.replace(/^(?:\d+[.)]|[-•*])\s*/, "").trim()).join(" ").trim())
+      .filter(Boolean);
+  }
+  const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
+  const steps = [];
+  let buffer = "";
+  for (const l of lines) {
+    const marked = l.match(/^(?:\d+[.)]|[-•*])\s*(.*)$/);
+    if (marked) {
+      if (buffer) steps.push(buffer.trim());
+      buffer = marked[1];
+    } else if (buffer) {
+      buffer = `${buffer} ${l}`;
+    } else {
+      steps.push(l);
+    }
+  }
+  if (buffer) steps.push(buffer.trim());
+  return steps.filter(Boolean);
+}
+
 function findSectionIndex(lines, keywords) {
   return lines.findIndex((l) => {
     const t = l.trim().toLowerCase().replace(/:$/, "");
@@ -121,19 +154,7 @@ export function parseRecipeText(text) {
 
   if (zubereitungIdx >= 0) {
     const stepLines = lines.slice(zubereitungIdx + 1);
-    const steps = [];
-    let buffer = "";
-    for (const l of stepLines) {
-      const numbered = l.match(/^\d+[.)]\s*(.*)$/);
-      if (numbered) {
-        if (buffer) steps.push(buffer.trim());
-        buffer = numbered[1];
-      } else {
-        buffer = buffer ? `${buffer} ${l}` : l;
-      }
-    }
-    if (buffer) steps.push(buffer.trim());
-    result.steps = steps.filter(Boolean);
+    result.steps = splitStepsText(stepLines.join("\n"));
   }
 
   return result;
