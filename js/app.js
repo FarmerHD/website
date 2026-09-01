@@ -5,7 +5,8 @@ import { getCache, setCache, subscribe as subscribeSync, initSync } from "./lib/
 import { RecipesView } from "./views/recipes.js";
 import { PlanView } from "./views/plan.js";
 import { ShoppingView } from "./views/shopping.js";
-import { IconBook, IconCalendar, IconCart, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX } from "./lib/icons.js";
+import { PantryView } from "./views/pantry.js";
+import { IconBook, IconCalendar, IconCart, IconBox, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX } from "./lib/icons.js";
 
 initSync(sb);
 
@@ -13,6 +14,7 @@ const TABS = [
   { key: "recipes", label: "Rezepte", icon: IconBook },
   { key: "plan", label: "Wochenplan", icon: IconCalendar },
   { key: "shopping", label: "Einkaufsliste", icon: IconCart },
+  { key: "pantry", label: "Vorrat", icon: IconBox },
 ];
 
 function useSyncStatus() {
@@ -44,6 +46,7 @@ function App() {
   const [recipes, setRecipes] = useState(() => getCache("recipes") || []);
   const [planItems, setPlanItems] = useState(() => getCache("plan") || []);
   const [shoppingItems, setShoppingItems] = useState(() => getCache("shopping") || []);
+  const [pantryItems, setPantryItems] = useState(() => getCache("pantry") || []);
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
 
@@ -53,15 +56,17 @@ function App() {
     if (!session) return;
     let cancelled = false;
     async function loadAll() {
-      const [r, p, s] = await Promise.all([
+      const [r, p, s, v] = await Promise.all([
         sb.from("recipes").select("*").order("created_at", { ascending: false }),
         sb.from("plan_items").select("*"),
         sb.from("shopping_items").select("*").order("created_at", { ascending: true }),
+        sb.from("pantry_items").select("*").order("created_at", { ascending: true }),
       ]);
       if (cancelled) return;
       if (!r.error && r.data) { setRecipes(r.data); setCache("recipes", r.data); }
       if (!p.error && p.data) { setPlanItems(p.data); setCache("plan", p.data); }
       if (!s.error && s.data) { setShoppingItems(s.data); setCache("shopping", s.data); }
+      if (!v.error && v.data) { setPantryItems(v.data); setCache("pantry", v.data); }
     }
     loadAll();
     return () => { cancelled = true; };
@@ -70,6 +75,7 @@ function App() {
   useEffect(() => { setCache("recipes", recipes); }, [recipes]);
   useEffect(() => { setCache("plan", planItems); }, [planItems]);
   useEffect(() => { setCache("shopping", shoppingItems); }, [shoppingItems]);
+  useEffect(() => { setCache("pantry", pantryItems); }, [pantryItems]);
 
   if (loading) return html`<div class="spinner-page"><div class="spinner"></div></div>`;
   if (recoveryMode) return html`<${SetNewPasswordScreen} onDone=${() => setRecoveryMode(false)} />`;
@@ -81,12 +87,13 @@ function App() {
   }
 
   const viewProps = {
-    recipes, planItems, shoppingItems, userId, showToast,
+    recipes, planItems, shoppingItems, pantryItems, userId, showToast,
     onCreate: (r) => setRecipes((rs) => [r, ...rs]),
     onUpdate: (r) => setRecipes((rs) => rs.map((x) => (x.id === r.id ? { ...x, ...r } : x))),
     onDelete: removeRecipe,
     onPlanChange: setPlanItems,
     onShoppingChange: setShoppingItems,
+    onPantryChange: setPantryItems,
     goToShopping: () => setTab("shopping"),
   };
 
@@ -128,6 +135,7 @@ function App() {
           ${tab === "recipes" && html`<${RecipesView} ...${viewProps} />`}
           ${tab === "plan" && html`<${PlanView} ...${viewProps} />`}
           ${tab === "shopping" && html`<${ShoppingView} ...${viewProps} />`}
+          ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
           <footer class="site-footer" style="display:block">
             <a href="impressum.html">Impressum</a><span style="color:var(--border-strong)">|</span><a href="datenschutz.html">Datenschutz</a>
           </footer>
