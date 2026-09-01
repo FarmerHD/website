@@ -50,6 +50,14 @@ function App() {
   const [planSnapshot, setPlanSnapshot] = useState(() => getCache("planSnapshot") || []);
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
+  const [legalOpen, setLegalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!legalOpen) return;
+    const onDocClick = (e) => { if (!e.target.closest(".legal-menu")) setLegalOpen(false); };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [legalOpen]);
 
   const userId = session && session.user ? session.user.id : null;
 
@@ -137,6 +145,15 @@ function App() {
           <span class="topbar-title font-display">Meine Rezepte</span>
           <span class="topbar-spacer"></span>
           <${SyncPill} status=${status} />
+          <div class="legal-menu">
+            <button class="legal-menu-trigger ${legalOpen ? "open" : ""}" onClick=${() => setLegalOpen((v) => !v)}>Rechtliches</button>
+            ${legalOpen && html`
+              <div class="legal-menu-panel">
+                <a href="impressum.html">Impressum</a>
+                <a href="datenschutz.html">Datenschutz</a>
+              </div>
+            `}
+          </div>
           <button class="btn btn-icon btn-ghost" onClick=${() => sb.auth.signOut()} aria-label="Abmelden"><${IconLogOut} strokeWidth="2" /></button>
         </header>
 
@@ -148,16 +165,11 @@ function App() {
         </main>
 
         <nav class="tabbar">
-          <div class="tabbar-row">
-            ${TABS.map((t) => html`
-              <button key=${t.key} class="tabbar-item ${tab === t.key ? "active" : ""}" onClick=${() => setTab(t.key)}>
-                <${t.icon} strokeWidth="2" /> ${t.label}
-              </button>
-            `)}
-          </div>
-          <div class="tabbar-legal">
-            <a href="impressum.html">Impressum</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a>
-          </div>
+          ${TABS.map((t) => html`
+            <button key=${t.key} class="tabbar-item ${tab === t.key ? "active" : ""}" onClick=${() => setTab(t.key)}>
+              <${t.icon} strokeWidth="2" /> ${t.label}
+            </button>
+          `)}
         </nav>
       </div>
 
