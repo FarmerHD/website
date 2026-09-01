@@ -2,7 +2,7 @@ import { html, useState, useMemo, useRef } from "../lib/preact.js";
 import { supabaseClient as sb } from "../config.js";
 import { write, newId } from "../lib/offline.js";
 import { CATEGORIES, CATEGORY_STYLE, UNITS } from "../lib/constants.js";
-import { parseRecipeText } from "../lib/parser.js";
+import { parseRecipeText, splitStepsText } from "../lib/parser.js";
 import { formatRelativeDate } from "../lib/format.js";
 import {
   IconSearch, IconPlus, IconX, IconEdit, IconTrash, IconClock, IconUsers,
@@ -30,6 +30,40 @@ function RecipeCard({ recipe, onOpen }) {
         </div>
       </div>
     </button>
+  `;
+}
+
+function StepEditor({ steps, onChange }) {
+  function update(i, value) {
+    onChange(steps.map((s, idx) => (idx === i ? value : s)));
+  }
+  function remove(i) {
+    onChange(steps.filter((_, idx) => idx !== i));
+  }
+  function add() {
+    onChange([...steps, ""]);
+  }
+  function handlePaste(i, e) {
+    const text = e.clipboardData.getData("text");
+    if (!text || !text.includes("\n")) return; // einzelne Zeile: normales Einfügen
+    const pasted = splitStepsText(text);
+    if (pasted.length <= 1) return;
+    e.preventDefault();
+    const next = [...steps];
+    next.splice(i, 1, ...pasted);
+    onChange(next);
+  }
+  return html`
+    <div>
+      ${steps.map((s, i) => html`
+        <div class="step-edit-row" key=${i}>
+          <span class="step-num">${i + 1}</span>
+          <textarea class="textarea" rows="2" placeholder="Schritt beschreiben …" value=${s} onInput=${(e) => update(i, e.target.value)} onPaste=${(e) => handlePaste(i, e)}></textarea>
+          <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Schritt entfernen"><${IconX} strokeWidth="3" /></button>
+        </div>
+      `)}
+      <button type="button" class="btn btn-secondary btn-sm" onClick=${add}><${IconPlus} strokeWidth="2.4" /> Schritt hinzufügen</button>
+    </div>
   `;
 }
 
@@ -64,7 +98,7 @@ function IngredientEditor({ ingredients, onChange }) {
 function emptyForm() {
   return {
     name: "", category: "Sonstiges", portions: 4, prep_time: "", cook_time: "",
-    notes: "", ingredients: [], stepsText: "", image_url: "", imageFile: null, imagePreview: "",
+    notes: "", ingredients: [], steps: [], image_url: "", imageFile: null, imagePreview: "",
   };
 }
 
@@ -75,7 +109,7 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
       name: recipe.name, category: recipe.category, portions: recipe.portions,
       prep_time: recipe.prep_time ?? "", cook_time: recipe.cook_time ?? "", notes: recipe.notes || "",
       ingredients: (recipe.ingredients || []).map((i) => ({ ...i })),
-      stepsText: (recipe.steps || []).join("\n\n"),
+      steps: [...(recipe.steps || [])],
       image_url: recipe.image_url || "", imageFile: null, imagePreview: recipe.image_url || "",
     }
     : emptyForm());
@@ -95,7 +129,7 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
       prep_time: parsed.prepTime ?? f.prep_time,
       cook_time: parsed.cookTime ?? f.cook_time,
       ingredients: parsed.ingredients.length ? parsed.ingredients : f.ingredients,
-      stepsText: parsed.steps.length ? parsed.steps.join("\n\n") : f.stepsText,
+      steps: parsed.steps.length ? parsed.steps : f.steps,
     }));
     setImportHint(parsed.hasIngredientsSection
       ? "Übernommen. Bitte kurz prüfen und bei Bedarf korrigieren."
@@ -136,7 +170,7 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
       cook_time: form.cook_time === "" ? null : Number(form.cook_time),
       notes: form.notes,
       ingredients: form.ingredients.filter((i) => i.name.trim()).map((i) => ({ name: i.name.trim(), amount: Number(i.amount) || 0, unit: i.unit })),
-      steps: form.stepsText.split(/\n\s*\n/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean),
+      steps: form.steps.map((s) => s.trim()).filter(Boolean),
       image_url: imageUrl || null,
     };
 
@@ -229,7 +263,7 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
 
             <div class="field">
               <label>Zubereitung</label>
-              <textarea class="textarea" rows="6" placeholder="Ein Schritt pro Absatz (Leerzeile trennt Schritte) …" value=${form.stepsText} onInput=${(e) => setForm({ ...form, stepsText: e.target.value })}></textarea>
+              <${StepEditor} steps=${form.steps} onChange=${(steps) => setForm({ ...form, steps })} />
             </div>
 
             <div class="field">

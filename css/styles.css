@@ -509,6 +509,10 @@ input[type="checkbox"].check:checked::after{
 }
 .notes-box{background:var(--accent-soft);border-radius:var(--radius-sm);padding:14px 16px;font-size:13.5px;color:var(--ink);white-space:pre-wrap}
 
+.step-edit-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px;position:relative}
+.step-edit-row .step-num{margin-top:9px}
+.step-edit-row textarea{flex:1;min-height:56px;resize:vertical}
+
 .ing-edit-row{display:grid;grid-template-columns:1fr 74px 96px;gap:8px;align-items:center;margin-bottom:16px;position:relative}
 .ing-row-remove{
   position:absolute;top:-10px;right:-8px;z-index:1;
