@@ -524,7 +524,13 @@ input[type="checkbox"].check:checked::after{
 .plan-summary-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px}
 .plan-total{font-size:13.5px;color:var(--ink-soft)}
 .plan-total b{color:var(--ink);font-size:16px}
-.plan-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.plan-week{display:flex;flex-direction:column;margin-bottom:14px}
+.plan-day-row{display:flex;gap:12px;padding:8px 0;border-bottom:1px dashed var(--border)}
+.plan-day-row:last-child{border-bottom:none}
+.plan-day-label{width:32px;flex-shrink:0;padding-top:5px;font-weight:700;font-size:12.5px;color:var(--primary-dark)}
+.plan-day-label.muted{color:var(--ink-faint)}
+.plan-day-items{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:6px}
+.plan-day-empty{padding-top:5px;color:var(--ink-faint);font-size:13px}
 .plan-list{display:flex;flex-direction:column;gap:8px}
 .plan-row{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -540,12 +546,6 @@ input[type="checkbox"].check:checked::after{
   .plan-row-controls{flex-basis:100%;justify-content:space-between;margin-top:4px}
 }
 .plan-weekday-select{width:auto;min-width:132px;padding-top:8px;padding-bottom:8px;font-size:13.5px}
-.plan-weekday-badge{
-  display:inline-flex;align-items:center;
-  padding:3px 9px;border-radius:var(--radius-pill);
-  font-size:11px;font-weight:700;letter-spacing:.02em;
-  background:var(--primary-soft);color:var(--primary-dark);
-}
 
 /* ============================================================
    Einkaufsliste

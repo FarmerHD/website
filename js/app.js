@@ -94,7 +94,6 @@ function App() {
     onPlanChange: setPlanItems,
     onShoppingChange: setShoppingItems,
     onPantryChange: setPantryItems,
-    goToShopping: () => setTab("shopping"),
   };
 
   return html`

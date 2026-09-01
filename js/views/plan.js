@@ -4,7 +4,7 @@ import { mergeLines, canMerge, mergedAmountUnit } from "../lib/categorize.js";
 import { CATEGORY_STYLE, WEEKDAYS, WEEKDAY_SHORT } from "../lib/constants.js";
 import { IconX, IconCart, IconCalendar } from "../lib/icons.js";
 
-export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, showToast, goToShopping, userId }) {
+export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, showToast, userId }) {
   const [generating, setGenerating] = useState(false);
 
   const rows = useMemo(() => recipes.map((r) => {
@@ -80,8 +80,9 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
     onShoppingChange(current);
     setGenerating(false);
     showToast(`Einkaufsliste aktualisiert (${merged.length} Zutat${merged.length === 1 ? "" : "en"}).`, "success");
-    if (goToShopping) goToShopping();
   }
+
+  const unassigned = selectedRows.filter((r) => !r.weekday);
 
   return html`
     <div>
@@ -95,14 +96,36 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
           </div>
         </div>
         ${selectedRows.length > 0 && html`
-          <div class="plan-chips">
-            ${selectedRows.map(({ recipe, portions, weekday }) => html`
-              <span class="chip" key=${recipe.id}>
-                ${weekday && html`<span class="plan-weekday-badge">${WEEKDAY_SHORT[weekday]}</span>`}
-                ${recipe.name} · ${portions}×
-                <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
-              </span>
-            `)}
+          <div class="plan-week">
+            ${WEEKDAYS.map((day) => {
+              const items = selectedRows.filter((r) => r.weekday === day);
+              return html`
+                <div class="plan-day-row" key=${day}>
+                  <span class="plan-day-label">${WEEKDAY_SHORT[day]}</span>
+                  <div class="plan-day-items">
+                    ${items.length === 0 ? html`<span class="plan-day-empty">–</span>` : items.map(({ recipe, portions }) => html`
+                      <span class="chip" key=${recipe.id}>
+                        ${recipe.name} · ${portions}×
+                        <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
+                      </span>
+                    `)}
+                  </div>
+                </div>
+              `;
+            })}
+            ${unassigned.length > 0 && html`
+              <div class="plan-day-row">
+                <span class="plan-day-label muted">–</span>
+                <div class="plan-day-items">
+                  ${unassigned.map(({ recipe, portions }) => html`
+                    <span class="chip" key=${recipe.id}>
+                      ${recipe.name} · ${portions}×
+                      <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
+                    </span>
+                  `)}
+                </div>
+              </div>
+            `}
           </div>
         `}
         <button class="btn btn-accent btn-block" disabled=${selectedRows.length === 0 || generating} onClick=${generateShoppingList}>
