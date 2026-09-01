@@ -65,11 +65,30 @@ export function mergeLines(lines) {
   return result;
 }
 
+// Sehr kurze Muster (z.B. "ei" für Eier) matchen sonst als Teilstring in
+// unverwandten Wörtern ("Reis", "Weizenmehl") — dafür an Wortgrenzen
+// gebunden. Längere Muster bleiben bewusst Teilstring-Treffer, damit
+// deutsche Wortzusammensetzungen ("Zwiebelringe", "Goudakäse") weiter
+// erkannt werden.
+// "ei" als Teilstring trifft sonst auch unverwandte Wörter wie "Reis"
+// oder "Weizenmehl" — deshalb an Wortgrenzen gebunden. Andere kurze
+// Muster wie "öl" bleiben bewusst Teilstring-Treffer, weil sie als
+// Kompositum-Suffix vorkommen ("Rapsöl", "Olivenöl") und dort keine
+// vergleichbaren Kollisionen bekannt sind.
+const BOUNDARY_PATTERNS = new Set(["ei", "eier"]);
+
+function matchesPattern(name, pattern) {
+  if (BOUNDARY_PATTERNS.has(pattern)) {
+    return new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, "iu").test(name);
+  }
+  return name.includes(pattern);
+}
+
 export function assignShoppingGroup(item) {
   const name = (item.name || "").toLowerCase();
   for (const group of SHOPPING_GROUPS) {
     if (!group.namePatterns) continue;
-    if (group.namePatterns.some((p) => name.includes(p))) return group;
+    if (group.namePatterns.some((p) => matchesPattern(name, p))) return group;
   }
   for (const group of SHOPPING_GROUPS) {
     if (!group.unitPatterns) continue;
