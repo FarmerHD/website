@@ -29,6 +29,23 @@ export function subscribe(cb) {
   return () => listeners.delete(cb);
 }
 
+// Wird ausgelöst, nachdem in der Warteschlange gesammelte Änderungen
+// erfolgreich nachgeliefert wurden. Ohne das würde eine offline (oder
+// zwischenzeitlich noch nicht übertragene) Änderung nach dem Sync zwar
+// in der Datenbank landen, aber in der schon geladenen App-Ansicht
+// unsichtbar bleiben, bis die Seite komplett neu geladen wird — z.B.
+// könnte ein manuell hinzugefügter Einkaufslisten-Artikel dann beim
+// nächsten "Einkaufsliste erstellen" fälschlich fehlen, weil dessen
+// lokaler Stand nie aktualisiert wurde.
+const syncedListeners = new Set();
+export function onSynced(cb) {
+  syncedListeners.add(cb);
+  return () => syncedListeners.delete(cb);
+}
+function notifySynced() {
+  for (const cb of syncedListeners) cb();
+}
+
 export function getStatus() {
   return state;
 }
@@ -107,10 +124,12 @@ export async function flushQueue() {
   flushing = true;
   setState({ syncing: true });
   let remaining = [...queue];
+  let appliedAny = false;
   while (remaining.length > 0) {
     const m = remaining[0];
     try {
       await applyMutation(m);
+      appliedAny = true;
       remaining = remaining.slice(1);
       saveQueue(remaining);
     } catch (err) {
@@ -126,6 +145,7 @@ export async function flushQueue() {
   }
   flushing = false;
   setState({ syncing: false });
+  if (appliedAny) notifySynced();
 }
 
 // Schreibt direkt, wenn online; sammelt sonst (oder bei Netzwerkfehler)

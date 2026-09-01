@@ -1,10 +1,41 @@
 import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { mergeLines, canMerge } from "../lib/categorize.js";
-import { CATEGORY_STYLE, WEEKDAYS, WEEKDAY_SHORT } from "../lib/constants.js";
-import { IconX, IconCart, IconCalendar } from "../lib/icons.js";
+import { CATEGORY_STYLE, WEEKDAYS } from "../lib/constants.js";
+import { IconCart, IconCalendar } from "../lib/icons.js";
 
-export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, showToast, userId }) {
+function renderSnapshotWeek(items) {
+  const byDay = new Map(WEEKDAYS.map((d) => [d, []]));
+  const unassigned = [];
+  for (const item of items) {
+    if (item.weekday && byDay.has(item.weekday)) byDay.get(item.weekday).push(item);
+    else unassigned.push(item);
+  }
+  return html`
+    <div class="plan-week plan-week-view">
+      ${WEEKDAYS.map((day) => html`
+        <div class="plan-day-row" key=${day}>
+          <span class="plan-day-label">${day}</span>
+          <div class="plan-day-items">
+            ${byDay.get(day).length === 0 ? html`<span class="plan-day-empty">–</span>` : byDay.get(day).map((it) => html`
+              <span class="chip plan-view-chip" key=${it.id}>${it.recipe_name} · ${it.portions}×</span>
+            `)}
+          </div>
+        </div>
+      `)}
+      ${unassigned.length > 0 && html`
+        <div class="plan-day-row">
+          <span class="plan-day-label muted">Ohne Tag</span>
+          <div class="plan-day-items">
+            ${unassigned.map((it) => html`<span class="chip plan-view-chip" key=${it.id}>${it.recipe_name} · ${it.portions}×</span>`)}
+          </div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, planSnapshot, onPlanSnapshotChange, showToast, userId }) {
   const [generating, setGenerating] = useState(false);
   const [mode, setMode] = useState("plan"); // "plan" | "view" — je Fenster/Tab unabhängig, bewusst nicht gespeichert
 
@@ -98,42 +129,33 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
       const { error } = await write("shopping_items", "delete", null, { id: item.id });
       if (error) showToast("Fehler beim Entfernen: " + error.message, "error");
     }
-
     onShoppingChange(next);
+
+    // Aktuellen Plan als Momentaufnahme in "Ansicht" einfrieren, dann
+    // "Planen" leeren — bereit für die nächste Woche, ohne dass die
+    // gerade erstellte Woche aus der Ansicht verschwindet.
+    const snapshotRows = selectedRows.map(({ recipe, portions, weekday }) => ({
+      id: newId(), user_id: userId, recipe_name: recipe.name, category: recipe.category,
+      weekday: weekday || null, portions,
+    }));
+    const { error: delErr } = await write("plan_snapshot_items", "delete", null, { user_id: userId });
+    if (delErr) showToast("Konnte alte Wochenansicht nicht löschen: " + delErr.message, "error");
+    if (snapshotRows.length > 0) {
+      const { error: insErr } = await write("plan_snapshot_items", "insert", snapshotRows);
+      if (insErr) showToast("Konnte Wochenansicht nicht speichern: " + insErr.message, "error");
+    }
+    onPlanSnapshotChange(snapshotRows);
+
+    const clearedPlanItems = planItems.map((p) => (p.selected ? { ...p, selected: false, weekday: null } : p));
+    const clearedRows = planItems.filter((p) => p.selected).map((p) => ({ recipe_id: p.recipe_id, user_id: userId, selected: false, portions: p.portions, weekday: null }));
+    if (clearedRows.length > 0) {
+      const { error: clearErr } = await write("plan_items", "upsert", clearedRows);
+      if (clearErr) showToast("Konnte Planung nicht leeren: " + clearErr.message, "error");
+    }
+    onPlanChange(clearedPlanItems);
+
     setGenerating(false);
     showToast(`Einkaufsliste aktualisiert (${next.length} Artikel).`, "success");
-  }
-
-  const unassigned = selectedRows.filter((r) => !r.weekday);
-
-  function renderWeekGrid({ editable, big }) {
-    const dayChip = ({ recipe, portions }) => html`
-      <span class="chip ${big ? "plan-view-chip" : ""}" key=${recipe.id}>
-        ${recipe.name} · ${portions}×
-        ${editable && html`<button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>`}
-      </span>
-    `;
-    return html`
-      <div class="plan-week ${big ? "plan-week-view" : ""}">
-        ${WEEKDAYS.map((day) => {
-          const items = selectedRows.filter((r) => r.weekday === day);
-          return html`
-            <div class="plan-day-row" key=${day}>
-              <span class="plan-day-label">${big ? day : WEEKDAY_SHORT[day]}</span>
-              <div class="plan-day-items">
-                ${items.length === 0 ? html`<span class="plan-day-empty">–</span>` : items.map(dayChip)}
-              </div>
-            </div>
-          `;
-        })}
-        ${unassigned.length > 0 && html`
-          <div class="plan-day-row">
-            <span class="plan-day-label muted">${big ? "Ohne Tag" : "–"}</span>
-            <div class="plan-day-items">${unassigned.map(dayChip)}</div>
-          </div>
-        `}
-      </div>
-    `;
   }
 
   return html`
@@ -146,13 +168,13 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
       </div>
 
       ${mode === "view" ? html`
-        ${selectedRows.length === 0 ? html`
+        ${planSnapshot.length === 0 ? html`
           <div class="empty-state">
             <${IconCalendar} />
             <h3>Noch nichts geplant</h3>
-            <p>Wechsle zu „Planen“, um Rezepte für die Woche auszuwählen.</p>
+            <p>Wechsle zu „Planen“, wähle Rezepte aus und erstelle die Einkaufsliste — die Woche erscheint danach hier.</p>
           </div>
-        ` : renderWeekGrid({ editable: false, big: true })}
+        ` : renderSnapshotWeek(planSnapshot)}
       ` : html`
         <div class="card card-pad plan-summary">
           <div class="plan-summary-head">
@@ -161,7 +183,6 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
               ${selectedRows.length > 0 && html` · <b>${totalPortions}</b> Portionen gesamt`}
             </div>
           </div>
-          ${selectedRows.length > 0 && renderWeekGrid({ editable: true, big: false })}
           <button class="btn btn-accent btn-block" disabled=${selectedRows.length === 0 || generating} onClick=${generateShoppingList}>
             <${IconCart} strokeWidth="2.2" /> ${generating ? "Erstellt Einkaufsliste …" : "Einkaufsliste erstellen"}
           </button>
