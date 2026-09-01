@@ -22,10 +22,7 @@ export const CATEGORY_STYLE = {
   "Sonstiges": "tag-7",
 };
 
-export const UNITS = [
-  "g", "kg", "ml", "l", "Stück", "Pck.", "EL", "TL",
-  "Becher", "Zehe", "Bund", "Scheibe", "Dose", "Prise",
-];
+export const UNITS = ["g", "kg", "ml", "l", "Stück", "EL", "TL"];
 
 // Lagerorte für den Vorrat, auf Wunsch fest vorgegeben.
 export const PANTRY_LOCATIONS = ["Kühlschrank", "Gefrierschrank", "Keller", "Küche", "Sonstiges"];
