@@ -1,12 +1,42 @@
 import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { canMerge, mergedAmountUnit } from "../lib/categorize.js";
-import { PANTRY_LOCATIONS, PANTRY_LOCATION_STYLE, UNITS } from "../lib/constants.js";
-import { IconPlus, IconEdit, IconTrash, IconCheck, IconX, IconBox } from "../lib/icons.js";
+import { PANTRY_LOCATIONS, PANTRY_LOCATION_STYLE, UNITS, EXPIRY_WARNING_DAYS } from "../lib/constants.js";
+import { IconPlus, IconEdit, IconTrash, IconCheck, IconX, IconBox, IconAlertTriangle } from "../lib/icons.js";
+
+function daysUntil(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + "T00:00:00");
+  return Math.round((target - today) / 86400000);
+}
+
+// Bei gleichnamigen zusammengeführten Artikeln (unterschiedliche MHDs) wird
+// bewusst das FRÜHERE Datum übernommen — sicherheitshalber lieber zu früh
+// als zu spät gewarnt.
+function earlierDate(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+function ExpiryBadge({ expiresAt }) {
+  if (!expiresAt) return null;
+  const days = daysUntil(expiresAt);
+  if (days < 0) {
+    return html`<span class="badge expiry-badge expired"><${IconAlertTriangle} strokeWidth="2.4" style="width:12px;height:12px" /> Abgelaufen</span>`;
+  }
+  if (days <= EXPIRY_WARNING_DAYS) {
+    const label = days === 0 ? "Läuft heute ab" : days === 1 ? "Läuft morgen ab" : `Läuft in ${days} Tagen ab`;
+    return html`<span class="badge expiry-badge soon"><${IconAlertTriangle} strokeWidth="2.4" style="width:12px;height:12px" /> ${label}</span>`;
+  }
+  const dateLabel = new Date(expiresAt + "T00:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return html`<span class="expiry-date">MHD ${dateLabel}</span>`;
+}
 
 function PantryItemRow({ item, onSave, onDelete }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ name: item.name, amount: item.amount, unit: item.unit, location: item.location });
+  const [draft, setDraft] = useState({ name: item.name, amount: item.amount, unit: item.unit, location: item.location, expires_at: item.expires_at || "" });
 
   if (editing) {
     return html`
@@ -20,9 +50,10 @@ function PantryItemRow({ item, onSave, onDelete }) {
           <select class="select" style="flex:1;min-width:110px" value=${draft.location} onChange=${(e) => setDraft({ ...draft, location: e.target.value })}>
             ${PANTRY_LOCATIONS.map((l) => html`<option value=${l}>${l}</option>`)}
           </select>
+          <input class="input" type="date" style="flex:1;min-width:130px" value=${draft.expires_at} onInput=${(e) => setDraft({ ...draft, expires_at: e.target.value })} />
         </div>
         <div class="shop-item-actions">
-          <button class="btn btn-icon btn-ghost" onClick=${() => { onSave(item.id, { name: draft.name.trim() || item.name, amount: Number(draft.amount) || 0, unit: draft.unit, location: draft.location }); setEditing(false); }} aria-label="Speichern"><${IconCheck} strokeWidth="2.4" /></button>
+          <button class="btn btn-icon btn-ghost" onClick=${() => { onSave(item.id, { name: draft.name.trim() || item.name, amount: Number(draft.amount) || 0, unit: draft.unit, location: draft.location, expires_at: draft.expires_at || null }); setEditing(false); }} aria-label="Speichern"><${IconCheck} strokeWidth="2.4" /></button>
           <button class="btn btn-icon btn-ghost" onClick=${() => setEditing(false)} aria-label="Abbrechen"><${IconX} strokeWidth="2.4" /></button>
         </div>
       </div>
@@ -34,6 +65,7 @@ function PantryItemRow({ item, onSave, onDelete }) {
       <div class="shop-item-body">
         <div class="shop-item-name">${item.name}</div>
         <div class="shop-item-amt">${item.amount} ${item.unit}</div>
+        <${ExpiryBadge} expiresAt=${item.expires_at} />
       </div>
       <div class="shop-item-actions">
         <button class="btn btn-icon btn-ghost" onClick=${() => setEditing(true)} aria-label="Bearbeiten"><${IconEdit} strokeWidth="2.2" /></button>
@@ -44,13 +76,17 @@ function PantryItemRow({ item, onSave, onDelete }) {
 }
 
 export function PantryView({ pantryItems: items, onPantryChange: onChange, showToast, userId }) {
-  const [addForm, setAddForm] = useState({ name: "", amount: "", unit: "Stück", location: PANTRY_LOCATIONS[0] });
+  const [addForm, setAddForm] = useState({ name: "", amount: "", unit: "Stück", location: PANTRY_LOCATIONS[0], expires_at: "" });
 
   const grouped = useMemo(() => {
     const byLoc = new Map(PANTRY_LOCATIONS.map((l) => [l, []]));
     for (const item of items) {
       const loc = byLoc.has(item.location) ? item.location : "Sonstiges";
       byLoc.get(loc).push(item);
+    }
+    // Bald ablaufende Artikel zuerst, damit sie nicht übersehen werden.
+    for (const list of byLoc.values()) {
+      list.sort((a, b) => (a.expires_at || "9999-99-99").localeCompare(b.expires_at || "9999-99-99"));
     }
     return PANTRY_LOCATIONS.map((l) => ({ location: l, items: byLoc.get(l) })).filter((g) => g.items.length > 0);
   }, [items]);
@@ -71,22 +107,23 @@ export function PantryView({ pantryItems: items, onPantryChange: onChange, showT
   async function addManual(e) {
     e.preventDefault();
     if (!addForm.name.trim()) return;
-    const candidate = { name: addForm.name.trim(), amount: Number(addForm.amount) || 1, unit: addForm.unit, location: addForm.location };
+    const candidate = { name: addForm.name.trim(), amount: Number(addForm.amount) || 1, unit: addForm.unit, location: addForm.location, expires_at: addForm.expires_at || null };
     const existing = items.find((i) => i.location === candidate.location && canMerge(i, candidate));
     if (existing) {
       const { amount, unit } = mergedAmountUnit(existing, candidate);
-      onChange(items.map((i) => (i.id === existing.id ? { ...i, amount, unit } : i)));
-      const { error } = await write("pantry_items", "update", { amount, unit }, { id: existing.id });
+      const expires_at = earlierDate(existing.expires_at, candidate.expires_at);
+      onChange(items.map((i) => (i.id === existing.id ? { ...i, amount, unit, expires_at } : i)));
+      const { error } = await write("pantry_items", "update", { amount, unit, expires_at }, { id: existing.id });
       if (error) showToast("Konnte nicht zusammenführen: " + error.message, "error");
       else showToast(`Menge bei „${existing.name}“ zusammengeführt.`, "success");
     } else {
       const id = newId();
-      const payload = { id, user_id: userId, name: candidate.name, amount: candidate.amount, unit: candidate.unit, location: candidate.location };
+      const payload = { id, user_id: userId, name: candidate.name, amount: candidate.amount, unit: candidate.unit, location: candidate.location, expires_at: candidate.expires_at };
       onChange([...items, payload]);
       const { error } = await write("pantry_items", "insert", payload);
       if (error) showToast("Hinzufügen fehlgeschlagen: " + error.message, "error");
     }
-    setAddForm({ ...addForm, name: "", amount: "" });
+    setAddForm({ ...addForm, name: "", amount: "", expires_at: "" });
   }
 
   return html`
@@ -102,6 +139,7 @@ export function PantryView({ pantryItems: items, onPantryChange: onChange, showT
         <select class="select select-location" value=${addForm.location} onChange=${(e) => setAddForm({ ...addForm, location: e.target.value })}>
           ${PANTRY_LOCATIONS.map((l) => html`<option value=${l}>${l}</option>`)}
         </select>
+        <input class="input" type="date" title="Mindesthaltbarkeit (optional)" value=${addForm.expires_at} onInput=${(e) => setAddForm({ ...addForm, expires_at: e.target.value })} />
         <button class="btn btn-primary" type="submit"><${IconPlus} strokeWidth="2.4" /> Hinzufügen</button>
       </form>
 

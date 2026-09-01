@@ -33,3 +33,6 @@ export const IconArrowLeft = wrap(() => html`<path d="M19 12H5"/><path d="m11 18
 export const IconSparkle = wrap(() => html`<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>`);
 export const IconImage = wrap(() => html`<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.7"/><path d="m21 16.5-5-4.5-9 7.5"/>`);
 export const IconBox = wrap(() => html`<path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16Z"/><path d="M3.5 8 12 12.5 20.5 8"/><path d="M12 12.5v8"/>`);
+export const IconChartBar = wrap(() => html`<path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/><path d="M2.5 20h19"/>`);
+export const IconAlertTriangle = wrap(() => html`<path d="M12 3.5 22 20.5H2Z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.5" r="0.4" fill="currentColor"/>`);
+export const IconFlame = wrap(() => html`<path d="M12 2c1 3-3 4-3 8a3 3 0 0 0 6 0c1 1 2 2.5 2 4.5a5 5 0 0 1-10 0C7 10 12 8 12 2Z"/>`);

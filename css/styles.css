@@ -587,6 +587,7 @@ input[type="checkbox"].check:checked::after{
 .add-item-form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
 .add-item-form .input{flex:2;min-width:120px}
 .add-item-form .input[type=number]{flex:1;min-width:70px}
+.add-item-form .input[type=date]{flex:1;min-width:150px;color:var(--ink-soft)}
 .add-item-form .select{flex:1;min-width:90px}
 @media (max-width:479px){
   .add-item-form .input:not([type=number]){flex-basis:100%}
@@ -612,6 +613,11 @@ input[type="checkbox"].check:checked::after{
 .shop-item-amt{color:var(--ink-soft);font-weight:500;font-size:13px}
 .shop-item-src{font-size:11.5px;color:var(--ink-faint);margin-top:2px}
 .shop-item-actions{display:flex;gap:2px;flex-shrink:0}
+
+.expiry-date{font-size:11.5px;color:var(--ink-faint);margin-top:2px;display:inline-block}
+.expiry-badge{margin-top:4px;padding:3px 9px 3px 7px;font-size:11px}
+.expiry-badge.soon{background:var(--accent-soft);color:var(--accent-dark)}
+.expiry-badge.expired{background:var(--danger-soft);color:var(--danger)}
 
 .print-only{display:none}
 @media print{
