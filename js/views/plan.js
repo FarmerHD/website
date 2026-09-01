@@ -1,6 +1,6 @@
 import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
-import { mergeLines, canMerge, mergedAmountUnit } from "../lib/categorize.js";
+import { mergeLines, canMerge } from "../lib/categorize.js";
 import { CATEGORY_STYLE, WEEKDAYS, WEEKDAY_SHORT } from "../lib/constants.js";
 import { IconX, IconCart, IconCalendar } from "../lib/icons.js";
 
@@ -45,6 +45,7 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
   async function generateShoppingList() {
     if (selectedRows.length === 0) return;
     setGenerating(true);
+
     const rawLines = [];
     for (const { recipe, portions } of selectedRows) {
       const ratio = (Number(portions) || 1) / (Number(recipe.portions) || 1);
@@ -57,29 +58,49 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
         });
       }
     }
-    const merged = mergeLines(rawLines);
 
-    let current = shoppingItems;
-    for (const line of merged) {
-      const existing = current.find((it) => canMerge(it, line));
-      if (existing) {
-        const { amount, unit } = mergedAmountUnit(existing, line);
-        const from_recipes = [...new Set([...(existing.from_recipes || []), ...line.from_recipes])];
-        const payload = { amount, unit, from_recipes };
-        current = current.map((it) => (it.id === existing.id ? { ...it, ...payload } : it));
-        const { error } = await write("shopping_items", "update", payload, { id: existing.id });
-        if (error) showToast("Fehler beim Zusammenführen: " + error.message, "error");
-      } else {
-        const id = newId();
-        const payload = { id, user_id: userId, name: line.name, amount: line.amount, unit: line.unit, checked: false, from_recipes: line.from_recipes };
-        current = [...current, payload];
-        const { error } = await write("shopping_items", "insert", payload);
+    // Manuell hinzugefügte Artikel gehen als Basis mit ein, damit sie wie
+    // gewohnt mit gleichnamigen Rezept-Zutaten zusammengeführt werden.
+    // Die komplette Liste wird danach frisch aus dem AKTUELLEN Plan
+    // berechnet (nicht auf die bestehenden Mengen draufaddiert) — sonst
+    // würde ein erneuter Klick auf "Einkaufsliste erstellen" (z. B. nach
+    // Hinzufügen eines weiteren Rezepts) bereits enthaltene Mengen ein
+    // zweites Mal aufaddieren.
+    const manualBase = shoppingItems
+      .filter((it) => !it.from_recipes || it.from_recipes.length === 0)
+      .map((it) => ({ name: it.name, amount: it.amount, unit: it.unit }));
+    const freshLines = mergeLines([...manualBase, ...rawLines]);
+
+    const usedOldIds = new Set();
+    const next = freshLines.map((line) => {
+      const match = shoppingItems.find((it) => !usedOldIds.has(it.id) && canMerge(it, line));
+      if (match) {
+        usedOldIds.add(match.id);
+        return { ...match, amount: line.amount, unit: line.unit, from_recipes: line.from_recipes };
+      }
+      return { id: newId(), user_id: userId, name: line.name, amount: line.amount, unit: line.unit, checked: false, from_recipes: line.from_recipes };
+    });
+    const removed = shoppingItems.filter((it) => !usedOldIds.has(it.id));
+
+    for (const item of next) {
+      const old = shoppingItems.find((it) => it.id === item.id);
+      if (!old) {
+        const { error } = await write("shopping_items", "insert", item);
         if (error) showToast("Fehler beim Hinzufügen: " + error.message, "error");
+      } else if (old.amount !== item.amount || old.unit !== item.unit || JSON.stringify(old.from_recipes) !== JSON.stringify(item.from_recipes)) {
+        const patch = { amount: item.amount, unit: item.unit, from_recipes: item.from_recipes };
+        const { error } = await write("shopping_items", "update", patch, { id: item.id });
+        if (error) showToast("Fehler beim Aktualisieren: " + error.message, "error");
       }
     }
-    onShoppingChange(current);
+    for (const item of removed) {
+      const { error } = await write("shopping_items", "delete", null, { id: item.id });
+      if (error) showToast("Fehler beim Entfernen: " + error.message, "error");
+    }
+
+    onShoppingChange(next);
     setGenerating(false);
-    showToast(`Einkaufsliste aktualisiert (${merged.length} Zutat${merged.length === 1 ? "" : "en"}).`, "success");
+    showToast(`Einkaufsliste aktualisiert (${next.length} Artikel).`, "success");
   }
 
   const unassigned = selectedRows.filter((r) => !r.weekday);
