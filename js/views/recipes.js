@@ -3,10 +3,15 @@ import { supabaseClient as sb } from "../config.js";
 import { write, newId } from "../lib/offline.js";
 import { CATEGORIES, CATEGORY_STYLE, UNITS } from "../lib/constants.js";
 import { parseRecipeText } from "../lib/parser.js";
+import { formatRelativeDate } from "../lib/format.js";
 import {
   IconSearch, IconPlus, IconX, IconEdit, IconTrash, IconClock, IconUsers,
-  IconCamera, IconLeaf, IconSparkle,
+  IconCamera, IconLeaf, IconSparkle, IconFlame,
 } from "../lib/icons.js";
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
 
 function RecipeCard({ recipe, onOpen }) {
   return html`
@@ -242,9 +247,11 @@ function RecipeForm({ recipe, onClose, onSaved, showToast, userId }) {
   `;
 }
 
-function RecipeDetail({ recipe, onClose, onEdit, onDelete }) {
+function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCookedAt }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [portions, setPortions] = useState(recipe.portions);
   const totalTime = (Number(recipe.prep_time) || 0) + (Number(recipe.cook_time) || 0);
+  const ratio = portions / (Number(recipe.portions) || 1);
   return html`
     <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
       <div class="sheet wide">
@@ -267,19 +274,33 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete }) {
           <div class="recipe-detail-photo">
             ${recipe.image_url ? html`<img src=${recipe.image_url} />` : html`<${IconLeaf} />`}
           </div>
-          <div class="badge" style="background:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"}-soft);color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"});margin-bottom:14px">${recipe.category}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+            <div class="badge" style="background:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"}-soft);color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${lastCookedAt && html`<span class="hint">Zuletzt gekocht: ${formatRelativeDate(lastCookedAt)}</span>`}
+              <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onMarkCooked(recipe)}><${IconFlame} strokeWidth="2.2" /> Heute gekocht</button>
+            </div>
+          </div>
           <div class="recipe-meta-row">
-            <div class="meta-tile"><span class="n">${recipe.portions}</span><span class="l">Portionen</span></div>
+            <div class="meta-tile">
+              <div class="stepper" style="margin-bottom:2px">
+                <button type="button" onClick=${() => setPortions((p) => Math.max(1, p - 1))}>−</button>
+                <span class="stepper-val">${portions}</span>
+                <button type="button" onClick=${() => setPortions((p) => p + 1)}>+</button>
+              </div>
+              <span class="l">Portionen</span>
+            </div>
             ${recipe.prep_time ? html`<div class="meta-tile"><span class="n">${recipe.prep_time} Min.</span><span class="l">Vorbereitung</span></div>` : ""}
             ${recipe.cook_time ? html`<div class="meta-tile"><span class="n">${recipe.cook_time} Min.</span><span class="l">Kochzeit</span></div>` : ""}
             ${totalTime > 0 ? html`<div class="meta-tile"><span class="n">${totalTime} Min.</span><span class="l">Gesamt</span></div>` : ""}
           </div>
+          ${portions !== recipe.portions && html`<p class="hint" style="margin:-8px 0 14px">Mengen unten umgerechnet für ${portions} Portion${portions === 1 ? "" : "en"} (Originalrezept: ${recipe.portions}).</p>`}
 
           <h3 class="section-title">Zutaten</h3>
           ${(recipe.ingredients || []).length === 0 ? html`<p class="hint">Keine Zutaten hinterlegt.</p>` : (recipe.ingredients || []).map((i, idx) => html`
             <div class="ingredient-row" key=${idx}>
               <span>${i.name}</span>
-              <span class="ingredient-amt">${i.amount} ${i.unit}</span>
+              <span class="ingredient-amt">${round2((Number(i.amount) || 0) * ratio)} ${i.unit}</span>
             </div>
           `)}
 
@@ -301,7 +322,7 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete }) {
   `;
 }
 
-export function RecipesView({ recipes, onCreate, onUpdate, onDelete, showToast, userId }) {
+export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, onCookLogChange, showToast, userId }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Alle");
   const [openForm, setOpenForm] = useState(null); // null | 'new' | recipe
@@ -314,6 +335,16 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, showToast, 
       (q === "" || r.name.toLowerCase().includes(q))
     );
   }, [recipes, search, category]);
+
+  const lastCookedByRecipe = useMemo(() => {
+    const map = new Map();
+    for (const entry of cookLog) {
+      if (!entry.recipe_id) continue;
+      const cur = map.get(entry.recipe_id);
+      if (!cur || entry.cooked_at > cur) map.set(entry.recipe_id, entry.cooked_at);
+    }
+    return map;
+  }, [cookLog]);
 
   function handleSaved(recipe, queued) {
     if (openForm && openForm !== "new") onUpdate(recipe); else onCreate(recipe);
@@ -328,6 +359,14 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, showToast, 
     const { error, queued } = await write("recipes", "delete", null, { id: recipe.id });
     if (error) showToast("Löschen fehlgeschlagen: " + error.message, "error");
     else showToast(queued ? "Gelöscht — wird synchronisiert." : "Rezept gelöscht.", "success");
+  }
+
+  async function markCooked(recipe) {
+    const entry = { id: newId(), user_id: userId, recipe_id: recipe.id, recipe_name: recipe.name, cooked_at: new Date().toISOString() };
+    onCookLogChange([entry, ...cookLog]);
+    const { error } = await write("cook_log", "insert", entry);
+    if (error) showToast("Konnte nicht speichern: " + error.message, "error");
+    else showToast(`„${recipe.name}“ als gekocht vermerkt.`, "success");
   }
 
   return html`
@@ -378,6 +417,8 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, showToast, 
           onClose=${() => setOpenDetail(null)}
           onEdit=${(r) => setOpenForm(r)}
           onDelete=${handleDelete}
+          onMarkCooked=${markCooked}
+          lastCookedAt=${lastCookedByRecipe.get(openDetail.id)}
         />
       `}
     </div>

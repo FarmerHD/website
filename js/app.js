@@ -6,7 +6,8 @@ import { RecipesView } from "./views/recipes.js";
 import { PlanView } from "./views/plan.js";
 import { ShoppingView } from "./views/shopping.js";
 import { PantryView } from "./views/pantry.js";
-import { IconBook, IconCalendar, IconCart, IconBox, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX } from "./lib/icons.js";
+import { StatsView } from "./views/stats.js";
+import { IconBook, IconCalendar, IconCart, IconBox, IconChartBar, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX } from "./lib/icons.js";
 
 initSync(sb);
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: "plan", label: "Wochenplan", icon: IconCalendar },
   { key: "shopping", label: "Einkaufsliste", icon: IconCart },
   { key: "pantry", label: "Vorrat", icon: IconBox },
+  { key: "stats", label: "Statistik", icon: IconChartBar },
 ];
 
 function useSyncStatus() {
@@ -48,6 +50,7 @@ function App() {
   const [shoppingItems, setShoppingItems] = useState(() => getCache("shopping") || []);
   const [pantryItems, setPantryItems] = useState(() => getCache("pantry") || []);
   const [planSnapshot, setPlanSnapshot] = useState(() => getCache("planSnapshot") || []);
+  const [cookLog, setCookLog] = useState(() => getCache("cookLog") || []);
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
   const [legalOpen, setLegalOpen] = useState(false);
@@ -65,12 +68,13 @@ function App() {
     if (!session) return;
     let cancelled = false;
     async function loadAll() {
-      const [r, p, s, v, n] = await Promise.all([
+      const [r, p, s, v, n, c] = await Promise.all([
         sb.from("recipes").select("*").order("created_at", { ascending: false }),
         sb.from("plan_items").select("*"),
         sb.from("shopping_items").select("*").order("created_at", { ascending: true }),
         sb.from("pantry_items").select("*").order("created_at", { ascending: true }),
         sb.from("plan_snapshot_items").select("*"),
+        sb.from("cook_log").select("*").order("cooked_at", { ascending: false }),
       ]);
       if (cancelled) return;
       if (!r.error && r.data) { setRecipes(r.data); setCache("recipes", r.data); }
@@ -78,6 +82,7 @@ function App() {
       if (!s.error && s.data) { setShoppingItems(s.data); setCache("shopping", s.data); }
       if (!v.error && v.data) { setPantryItems(v.data); setCache("pantry", v.data); }
       if (!n.error && n.data) { setPlanSnapshot(n.data); setCache("planSnapshot", n.data); }
+      if (!c.error && c.data) { setCookLog(c.data); setCache("cookLog", c.data); }
     }
     loadAll();
     // Nach erfolgreich nachgeholten Offline-Änderungen den aktuellen Stand
@@ -93,6 +98,7 @@ function App() {
   useEffect(() => { setCache("shopping", shoppingItems); }, [shoppingItems]);
   useEffect(() => { setCache("pantry", pantryItems); }, [pantryItems]);
   useEffect(() => { setCache("planSnapshot", planSnapshot); }, [planSnapshot]);
+  useEffect(() => { setCache("cookLog", cookLog); }, [cookLog]);
 
   if (loading) return html`<div class="spinner-page"><div class="spinner"></div></div>`;
   if (recoveryMode) return html`<${SetNewPasswordScreen} onDone=${() => setRecoveryMode(false)} />`;
@@ -104,7 +110,7 @@ function App() {
   }
 
   const viewProps = {
-    recipes, planItems, shoppingItems, pantryItems, planSnapshot, userId, showToast,
+    recipes, planItems, shoppingItems, pantryItems, planSnapshot, cookLog, userId, showToast,
     onCreate: (r) => setRecipes((rs) => [r, ...rs]),
     onUpdate: (r) => setRecipes((rs) => rs.map((x) => (x.id === r.id ? { ...x, ...r } : x))),
     onDelete: removeRecipe,
@@ -112,6 +118,7 @@ function App() {
     onShoppingChange: setShoppingItems,
     onPantryChange: setPantryItems,
     onPlanSnapshotChange: setPlanSnapshot,
+    onCookLogChange: setCookLog,
   };
 
   return html`
@@ -162,6 +169,7 @@ function App() {
           ${tab === "plan" && html`<${PlanView} ...${viewProps} />`}
           ${tab === "shopping" && html`<${ShoppingView} ...${viewProps} />`}
           ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
+          ${tab === "stats" && html`<${StatsView} ...${viewProps} />`}
         </main>
 
         <nav class="tabbar">

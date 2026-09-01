@@ -35,6 +35,10 @@ export const WEEKDAY_SHORT = {
 // Lagerorte für den Vorrat, auf Wunsch fest vorgegeben.
 export const PANTRY_LOCATIONS = ["Kühlschrank", "Gefrierschrank", "Keller", "Küche", "Sonstiges"];
 
+// Ab wie vielen Tagen vor Ablauf der Mindesthaltbarkeit ein Vorrats-Artikel
+// als "läuft bald ab" markiert wird.
+export const EXPIRY_WARNING_DAYS = 3;
+
 export const PANTRY_LOCATION_STYLE = {
   "Kühlschrank": "tag-8",
   "Gefrierschrank": "tag-5",
