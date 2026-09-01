@@ -47,6 +47,7 @@ function App() {
   const [planItems, setPlanItems] = useState(() => getCache("plan") || []);
   const [shoppingItems, setShoppingItems] = useState(() => getCache("shopping") || []);
   const [pantryItems, setPantryItems] = useState(() => getCache("pantry") || []);
+  const [planSnapshot, setPlanSnapshot] = useState(() => getCache("planSnapshot") || []);
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
 
@@ -56,17 +57,19 @@ function App() {
     if (!session) return;
     let cancelled = false;
     async function loadAll() {
-      const [r, p, s, v] = await Promise.all([
+      const [r, p, s, v, n] = await Promise.all([
         sb.from("recipes").select("*").order("created_at", { ascending: false }),
         sb.from("plan_items").select("*"),
         sb.from("shopping_items").select("*").order("created_at", { ascending: true }),
         sb.from("pantry_items").select("*").order("created_at", { ascending: true }),
+        sb.from("plan_snapshot_items").select("*"),
       ]);
       if (cancelled) return;
       if (!r.error && r.data) { setRecipes(r.data); setCache("recipes", r.data); }
       if (!p.error && p.data) { setPlanItems(p.data); setCache("plan", p.data); }
       if (!s.error && s.data) { setShoppingItems(s.data); setCache("shopping", s.data); }
       if (!v.error && v.data) { setPantryItems(v.data); setCache("pantry", v.data); }
+      if (!n.error && n.data) { setPlanSnapshot(n.data); setCache("planSnapshot", n.data); }
     }
     loadAll();
     return () => { cancelled = true; };
@@ -76,6 +79,7 @@ function App() {
   useEffect(() => { setCache("plan", planItems); }, [planItems]);
   useEffect(() => { setCache("shopping", shoppingItems); }, [shoppingItems]);
   useEffect(() => { setCache("pantry", pantryItems); }, [pantryItems]);
+  useEffect(() => { setCache("planSnapshot", planSnapshot); }, [planSnapshot]);
 
   if (loading) return html`<div class="spinner-page"><div class="spinner"></div></div>`;
   if (recoveryMode) return html`<${SetNewPasswordScreen} onDone=${() => setRecoveryMode(false)} />`;
@@ -87,13 +91,14 @@ function App() {
   }
 
   const viewProps = {
-    recipes, planItems, shoppingItems, pantryItems, userId, showToast,
+    recipes, planItems, shoppingItems, pantryItems, planSnapshot, userId, showToast,
     onCreate: (r) => setRecipes((rs) => [r, ...rs]),
     onUpdate: (r) => setRecipes((rs) => rs.map((x) => (x.id === r.id ? { ...x, ...r } : x))),
     onDelete: removeRecipe,
     onPlanChange: setPlanItems,
     onShoppingChange: setShoppingItems,
     onPantryChange: setPantryItems,
+    onPlanSnapshotChange: setPlanSnapshot,
   };
 
   return html`
