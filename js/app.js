@@ -50,6 +50,14 @@ function App() {
   const [planSnapshot, setPlanSnapshot] = useState(() => getCache("planSnapshot") || []);
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
+  const [legalOpen, setLegalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!legalOpen) return;
+    const onDocClick = (e) => { if (!e.target.closest(".legal-menu")) setLegalOpen(false); };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [legalOpen]);
 
   const userId = session && session.user ? session.user.id : null;
 
@@ -137,6 +145,15 @@ function App() {
           <span class="topbar-title font-display">Meine Rezepte</span>
           <span class="topbar-spacer"></span>
           <${SyncPill} status=${status} />
+          <div class="legal-menu">
+            <button class="legal-menu-trigger ${legalOpen ? "open" : ""}" onClick=${() => setLegalOpen((v) => !v)}>Rechtliches</button>
+            ${legalOpen && html`
+              <div class="legal-menu-panel">
+                <a href="impressum.html">Impressum</a>
+                <a href="datenschutz.html">Datenschutz</a>
+              </div>
+            `}
+          </div>
           <button class="btn btn-icon btn-ghost" onClick=${() => sb.auth.signOut()} aria-label="Abmelden"><${IconLogOut} strokeWidth="2" /></button>
         </header>
 
@@ -146,10 +163,6 @@ function App() {
           ${tab === "shopping" && html`<${ShoppingView} ...${viewProps} />`}
           ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
         </main>
-
-        <div class="legal-bar">
-          <a href="impressum.html">Impressum</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a>
-        </div>
 
         <nav class="tabbar">
           ${TABS.map((t) => html`
