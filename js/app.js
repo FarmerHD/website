@@ -1,7 +1,7 @@
 import { html, render, useState, useEffect, useCallback } from "./lib/preact.js";
 import { supabaseClient as sb } from "./config.js";
 import { useAuth, AuthScreen, SetNewPasswordScreen } from "./auth.js";
-import { getCache, setCache, subscribe as subscribeSync, initSync } from "./lib/offline.js";
+import { getCache, setCache, subscribe as subscribeSync, initSync, onSynced } from "./lib/offline.js";
 import { RecipesView } from "./views/recipes.js";
 import { PlanView } from "./views/plan.js";
 import { ShoppingView } from "./views/shopping.js";
@@ -72,7 +72,12 @@ function App() {
       if (!n.error && n.data) { setPlanSnapshot(n.data); setCache("planSnapshot", n.data); }
     }
     loadAll();
-    return () => { cancelled = true; };
+    // Nach erfolgreich nachgeholten Offline-Änderungen den aktuellen Stand
+    // neu laden — sonst könnte eine zwischenzeitlich (z.B. offline)
+    // hinzugefügte Änderung zwar in der Datenbank landen, in dieser schon
+    // geöffneten Sitzung aber unsichtbar bleiben, bis die Seite neu geladen wird.
+    const unsubscribeSynced = onSynced(() => { if (!cancelled) loadAll(); });
+    return () => { cancelled = true; unsubscribeSynced(); };
   }, [session]);
 
   useEffect(() => { setCache("recipes", recipes); }, [recipes]);
