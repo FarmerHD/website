@@ -6,6 +6,7 @@ import { IconX, IconCart, IconCalendar } from "../lib/icons.js";
 
 export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, showToast, userId }) {
   const [generating, setGenerating] = useState(false);
+  const [mode, setMode] = useState("plan"); // "plan" | "view" — je Fenster/Tab unabhängig, bewusst nicht gespeichert
 
   const rows = useMemo(() => recipes.map((r) => {
     const p = planItems.find((pi) => pi.recipe_id === r.id);
@@ -105,88 +106,101 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
 
   const unassigned = selectedRows.filter((r) => !r.weekday);
 
+  function renderWeekGrid({ editable, big }) {
+    const dayChip = ({ recipe, portions }) => html`
+      <span class="chip ${big ? "plan-view-chip" : ""}" key=${recipe.id}>
+        ${recipe.name} · ${portions}×
+        ${editable && html`<button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>`}
+      </span>
+    `;
+    return html`
+      <div class="plan-week ${big ? "plan-week-view" : ""}">
+        ${WEEKDAYS.map((day) => {
+          const items = selectedRows.filter((r) => r.weekday === day);
+          return html`
+            <div class="plan-day-row" key=${day}>
+              <span class="plan-day-label">${big ? day : WEEKDAY_SHORT[day]}</span>
+              <div class="plan-day-items">
+                ${items.length === 0 ? html`<span class="plan-day-empty">–</span>` : items.map(dayChip)}
+              </div>
+            </div>
+          `;
+        })}
+        ${unassigned.length > 0 && html`
+          <div class="plan-day-row">
+            <span class="plan-day-label muted">${big ? "Ohne Tag" : "–"}</span>
+            <div class="plan-day-items">${unassigned.map(dayChip)}</div>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
   return html`
     <div>
       <div class="desktop-header"><h1>Wochenplan</h1></div>
 
-      <div class="card card-pad plan-summary">
-        <div class="plan-summary-head">
-          <div class="plan-total">
-            <b>${selectedRows.length}</b> Rezept${selectedRows.length === 1 ? "" : "e"} ausgewählt
-            ${selectedRows.length > 0 && html` · <b>${totalPortions}</b> Portionen gesamt`}
-          </div>
-        </div>
-        ${selectedRows.length > 0 && html`
-          <div class="plan-week">
-            ${WEEKDAYS.map((day) => {
-              const items = selectedRows.filter((r) => r.weekday === day);
-              return html`
-                <div class="plan-day-row" key=${day}>
-                  <span class="plan-day-label">${WEEKDAY_SHORT[day]}</span>
-                  <div class="plan-day-items">
-                    ${items.length === 0 ? html`<span class="plan-day-empty">–</span>` : items.map(({ recipe, portions }) => html`
-                      <span class="chip" key=${recipe.id}>
-                        ${recipe.name} · ${portions}×
-                        <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
-                      </span>
-                    `)}
-                  </div>
-                </div>
-              `;
-            })}
-            ${unassigned.length > 0 && html`
-              <div class="plan-day-row">
-                <span class="plan-day-label muted">–</span>
-                <div class="plan-day-items">
-                  ${unassigned.map(({ recipe, portions }) => html`
-                    <span class="chip" key=${recipe.id}>
-                      ${recipe.name} · ${portions}×
-                      <button onClick=${() => upsertPlan(recipe.id, { selected: false })} aria-label="Entfernen"><${IconX} strokeWidth="2.4" style="width:13px;height:13px" /></button>
-                    </span>
-                  `)}
-                </div>
-              </div>
-            `}
-          </div>
-        `}
-        <button class="btn btn-accent btn-block" disabled=${selectedRows.length === 0 || generating} onClick=${generateShoppingList}>
-          <${IconCart} strokeWidth="2.2" /> ${generating ? "Erstellt Einkaufsliste …" : "Einkaufsliste erstellen"}
-        </button>
+      <div class="auth-tabs plan-mode-tabs">
+        <button class=${mode === "plan" ? "active" : ""} onClick=${() => setMode("plan")}>Planen</button>
+        <button class=${mode === "view" ? "active" : ""} onClick=${() => setMode("view")}>Ansicht</button>
       </div>
 
-      ${recipes.length === 0 ? html`
-        <div class="empty-state">
-          <${IconCalendar} />
-          <h3>Noch keine Rezepte zum Planen</h3>
-          <p>Lege zuerst ein paar Rezepte an, dann kannst du hier deine Woche zusammenstellen.</p>
-        </div>
+      ${mode === "view" ? html`
+        ${selectedRows.length === 0 ? html`
+          <div class="empty-state">
+            <${IconCalendar} />
+            <h3>Noch nichts geplant</h3>
+            <p>Wechsle zu „Planen“, um Rezepte für die Woche auszuwählen.</p>
+          </div>
+        ` : renderWeekGrid({ editable: false, big: true })}
       ` : html`
-        <div class="plan-list">
-          ${rows.map(({ recipe, selected, portions, weekday }) => html`
-            <div class="plan-row ${selected ? "selected" : ""}" key=${recipe.id}>
-              <label class="checkbox-row" style="flex:0">
-                <input type="checkbox" class="check" checked=${selected} onChange=${() => toggle(recipe)} />
-              </label>
-              <div class="plan-row-name">
-                <span class="n">${recipe.name}</span>
-                <span class="c" style="color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</span>
-              </div>
-              ${selected && html`
-                <div class="plan-row-controls">
-                  <select class="select plan-weekday-select" value=${weekday} onChange=${(e) => setWeekday(recipe.id, e.target.value)}>
-                    <option value="">Kein Tag</option>
-                    ${WEEKDAYS.map((d) => html`<option value=${d}>${d}</option>`)}
-                  </select>
-                  <div class="stepper">
-                    <button type="button" onClick=${() => setPortions(recipe.id, portions - 1)}>−</button>
-                    <span class="stepper-val">${portions}</span>
-                    <button type="button" onClick=${() => setPortions(recipe.id, portions + 1)}>+</button>
-                  </div>
-                </div>
-              `}
+        <div class="card card-pad plan-summary">
+          <div class="plan-summary-head">
+            <div class="plan-total">
+              <b>${selectedRows.length}</b> Rezept${selectedRows.length === 1 ? "" : "e"} ausgewählt
+              ${selectedRows.length > 0 && html` · <b>${totalPortions}</b> Portionen gesamt`}
             </div>
-          `)}
+          </div>
+          ${selectedRows.length > 0 && renderWeekGrid({ editable: true, big: false })}
+          <button class="btn btn-accent btn-block" disabled=${selectedRows.length === 0 || generating} onClick=${generateShoppingList}>
+            <${IconCart} strokeWidth="2.2" /> ${generating ? "Erstellt Einkaufsliste …" : "Einkaufsliste erstellen"}
+          </button>
         </div>
+
+        ${recipes.length === 0 ? html`
+          <div class="empty-state">
+            <${IconCalendar} />
+            <h3>Noch keine Rezepte zum Planen</h3>
+            <p>Lege zuerst ein paar Rezepte an, dann kannst du hier deine Woche zusammenstellen.</p>
+          </div>
+        ` : html`
+          <div class="plan-list">
+            ${rows.map(({ recipe, selected, portions, weekday }) => html`
+              <div class="plan-row ${selected ? "selected" : ""}" key=${recipe.id}>
+                <label class="checkbox-row" style="flex:0">
+                  <input type="checkbox" class="check" checked=${selected} onChange=${() => toggle(recipe)} />
+                </label>
+                <div class="plan-row-name">
+                  <span class="n">${recipe.name}</span>
+                  <span class="c" style="color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</span>
+                </div>
+                ${selected && html`
+                  <div class="plan-row-controls">
+                    <select class="select plan-weekday-select" value=${weekday} onChange=${(e) => setWeekday(recipe.id, e.target.value)}>
+                      <option value="">Kein Tag</option>
+                      ${WEEKDAYS.map((d) => html`<option value=${d}>${d}</option>`)}
+                    </select>
+                    <div class="stepper">
+                      <button type="button" onClick=${() => setPortions(recipe.id, portions - 1)}>−</button>
+                      <span class="stepper-val">${portions}</span>
+                      <button type="button" onClick=${() => setPortions(recipe.id, portions + 1)}>+</button>
+                    </div>
+                  </div>
+                `}
+              </div>
+            `)}
+          </div>
+        `}
       `}
     </div>
   `;
