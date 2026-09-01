@@ -488,6 +488,18 @@ input[type="checkbox"].check:checked::after{
 .notes-box{background:var(--accent-soft);border-radius:var(--radius-sm);padding:14px 16px;font-size:13.5px;color:var(--ink);white-space:pre-wrap}
 
 .ing-edit-row{display:grid;grid-template-columns:1fr 74px 96px auto;gap:8px;align-items:center;margin-bottom:8px}
+@media (max-width:479px){
+  .ing-edit-row{
+    grid-template-columns:1fr 1fr 40px;
+    grid-template-areas:"name name remove" "amount unit unit";
+    row-gap:6px;
+    margin-bottom:12px;
+  }
+  .ing-edit-row > input:not([type=number]){grid-area:name}
+  .ing-edit-row > input[type=number]{grid-area:amount}
+  .ing-edit-row > select{grid-area:unit}
+  .ing-edit-row > button{grid-area:remove;justify-self:end}
+}
 .import-box{background:var(--primary-mist);border:1px dashed var(--primary);border-radius:var(--radius-md);padding:14px;margin-bottom:20px}
 .import-box summary{cursor:pointer;font-weight:600;color:var(--primary-dark);font-size:13.5px;list-style:none;display:flex;align-items:center;gap:8px}
 .import-box summary::-webkit-details-marker{display:none}
