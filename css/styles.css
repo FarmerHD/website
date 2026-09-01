@@ -399,7 +399,8 @@ input[type="checkbox"].check:checked::after{
   position:sticky;top:0;background:var(--bg);border-radius:22px 22px 0 0;z-index:2;
 }
 .sheet-header h2{font-family:var(--font-display);font-size:20px;color:var(--primary-dark);flex:1}
-.sheet-body{overflow-y:auto;padding:18px;flex:1}
+.sheet form{display:flex;flex-direction:column;flex:1;min-height:0}
+.sheet-body{overflow-y:auto;overscroll-behavior:contain;padding:18px;flex:1;min-height:0}
 .sheet-foot{padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--bg)}
 @media (min-width:640px){
   .overlay{align-items:center;padding:24px}
