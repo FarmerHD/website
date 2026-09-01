@@ -94,7 +94,6 @@ function App() {
     onPlanChange: setPlanItems,
     onShoppingChange: setShoppingItems,
     onPantryChange: setPantryItems,
-    goToShopping: () => setTab("shopping"),
   };
 
   return html`
@@ -136,7 +135,7 @@ function App() {
           ${tab === "plan" && html`<${PlanView} ...${viewProps} />`}
           ${tab === "shopping" && html`<${ShoppingView} ...${viewProps} />`}
           ${tab === "pantry" && html`<${PantryView} ...${viewProps} />`}
-          <footer class="site-footer" style="display:block">
+          <footer class="site-footer content-footer">
             <a href="impressum.html">Impressum</a><span style="color:var(--border-strong)">|</span><a href="datenschutz.html">Datenschutz</a>
           </footer>
         </main>
