@@ -23,6 +23,7 @@ const APP_SHELL = [
   "js/views/recipes.js",
   "js/views/plan.js",
   "js/views/shopping.js",
+  "js/views/pantry.js",
   "js/vendor/preact.module.js",
   "js/vendor/hooks.module.js",
   "js/vendor/htm.module.js",

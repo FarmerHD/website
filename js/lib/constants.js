@@ -27,6 +27,17 @@ export const UNITS = [
   "Becher", "Zehe", "Bund", "Scheibe", "Dose", "Prise",
 ];
 
+// Lagerorte für den Vorrat, auf Wunsch fest vorgegeben.
+export const PANTRY_LOCATIONS = ["Kühlschrank", "Gefrierschrank", "Keller", "Küche", "Sonstiges"];
+
+export const PANTRY_LOCATION_STYLE = {
+  "Kühlschrank": "tag-8",
+  "Gefrierschrank": "tag-5",
+  "Keller": "tag-6",
+  "Küche": "tag-2",
+  "Sonstiges": "tag-7",
+};
+
 // Warengruppen für die Einkaufsliste, in Zuordnungsreihenfolge (2.3).
 export const SHOPPING_GROUPS = [
   {
