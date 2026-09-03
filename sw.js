@@ -21,6 +21,7 @@ const APP_SHELL = [
   "js/lib/categorize.js",
   "js/lib/offline.js",
   "js/lib/format.js",
+  "js/lib/jsonld.js",
   "js/views/recipes.js",
   "js/views/plan.js",
   "js/views/shopping.js",
