@@ -37,7 +37,7 @@ function stripBullet(line) {
   return line.replace(/^[\s*•\-–—▪]+/, "").trim();
 }
 
-function parseIngredientLine(rawLine) {
+export function parseIngredientLine(rawLine) {
   const line = stripBullet(rawLine);
   if (!line) return null;
   const amtMatch = line.match(AMOUNT_RE);

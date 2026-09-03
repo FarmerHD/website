@@ -2,6 +2,7 @@ import { html, render, useState, useEffect, useCallback } from "./lib/preact.js"
 import { supabaseClient as sb } from "./config.js";
 import { useAuth, AuthScreen, SetNewPasswordScreen } from "./auth.js";
 import { getCache, setCache, subscribe as subscribeSync, initSync, onSynced } from "./lib/offline.js";
+import { parseJsonLdBlocks, extractRecipeFromJsonLd } from "./lib/jsonld.js";
 import { RecipesView } from "./views/recipes.js";
 import { PlanView } from "./views/plan.js";
 import { ShoppingView } from "./views/shopping.js";
@@ -54,6 +55,7 @@ function App() {
   const status = useSyncStatus();
   const [toasts, showToast] = useToasts();
   const [legalOpen, setLegalOpen] = useState(false);
+  const [urlImportRecipe, setUrlImportRecipe] = useState(null);
 
   useEffect(() => {
     if (!legalOpen) return;
@@ -61,6 +63,27 @@ function App() {
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
   }, [legalOpen]);
+
+  // Rezept-Import per Lesezeichen-Tool (siehe recipes.js): die Zielseite
+  // öffnet die App mit ?importld=<rohe JSON-LD-Textblöcke>. Wird einmalig
+  // beim Laden ausgewertet, die Query bleibt nicht in der URL stehen.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("importld");
+    if (!raw) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    try {
+      const blocks = parseJsonLdBlocks(JSON.parse(raw));
+      const recipe = extractRecipeFromJsonLd(blocks);
+      if (recipe) {
+        setUrlImportRecipe(recipe);
+        setTab("recipes");
+      } else {
+        showToast("Auf dieser Seite wurden keine strukturierten Rezeptdaten gefunden.", "error");
+      }
+    } catch {
+      showToast("Der Import-Link konnte nicht gelesen werden.", "error");
+    }
+  }, []);
 
   const userId = session && session.user ? session.user.id : null;
 
@@ -119,6 +142,8 @@ function App() {
     onPantryChange: setPantryItems,
     onPlanSnapshotChange: setPlanSnapshot,
     onCookLogChange: setCookLog,
+    urlImportRecipe,
+    onUrlImportConsumed: () => setUrlImportRecipe(null),
   };
 
   return html`

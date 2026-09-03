@@ -36,3 +36,6 @@ export const IconBox = wrap(() => html`<path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3
 export const IconChartBar = wrap(() => html`<path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/><path d="M2.5 20h19"/>`);
 export const IconAlertTriangle = wrap(() => html`<path d="M12 3.5 22 20.5H2Z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.5" r="0.4" fill="currentColor"/>`);
 export const IconFlame = wrap(() => html`<path d="M12 2c1 3-3 4-3 8a3 3 0 0 0 6 0c1 1 2 2.5 2 4.5a5 5 0 0 1-10 0C7 10 12 8 12 2Z"/>`);
+export const IconPlay = wrap(() => html`<path d="M6.5 4.2v15.6a1 1 0 0 0 1.53.85l12.5-7.8a1 1 0 0 0 0-1.7l-12.5-7.8a1 1 0 0 0-1.53.85Z"/>`);
+export const IconTimer = wrap(() => html`<circle cx="12" cy="13.5" r="8"/><path d="M12 13.5V9M9.5 2h5"/>`);
+export const IconLink = wrap(() => html`<path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.9 4.6a3.8 3.8 0 0 1 5.4 5.4L16.5 12"/><path d="M13 17.5 11.1 19.4a3.8 3.8 0 0 1-5.4-5.4L7.5 12"/>`);
