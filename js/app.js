@@ -65,24 +65,54 @@ function App() {
   }, [legalOpen]);
 
   // Rezept-Import per Lesezeichen-Tool (siehe recipes.js): die Zielseite
-  // öffnet die App mit ?importld=<rohe JSON-LD-Textblöcke>. Wird einmalig
-  // beim Laden ausgewertet, die Query bleibt nicht in der URL stehen.
+  // öffnet die App in einem neuen Tab mit ?importld=1 und schickt die
+  // rohen JSON-LD-Textblöcke per postMessage nach — bewusst nicht als
+  // URL-Parameter, weil reale Rezeptseiten ihre JSON-LD-Daten oft zusammen
+  // mit Kommentaren/Video-/Breadcrumb-Metadaten bündeln und das jede
+  // URL-Längengrenze sprengen kann ("414 URI Too Long"). postMessage kennt
+  // diese Grenze nicht. Die Herkunft wird über window.opener geprüft
+  // (nicht über die Origin, die ist ja pro Rezeptseite unterschiedlich).
   useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("importld");
-    if (!raw) return;
+    if (new URLSearchParams(window.location.search).get("importld") !== "1") return;
     window.history.replaceState({}, "", window.location.pathname);
-    try {
-      const blocks = parseJsonLdBlocks(JSON.parse(raw));
-      const recipe = extractRecipeFromJsonLd(blocks);
-      if (recipe) {
-        setUrlImportRecipe(recipe);
-        setTab("recipes");
-      } else {
-        showToast("Auf dieser Seite wurden keine strukturierten Rezeptdaten gefunden.", "error");
-      }
-    } catch {
-      showToast("Der Import-Link konnte nicht gelesen werden.", "error");
+    if (!window.opener) {
+      showToast("Import fehlgeschlagen — bitte über das Lesezeichen-Tool erneut versuchen.", "error");
+      return;
     }
+
+    function handleData(blocksRaw) {
+      try {
+        const blocks = parseJsonLdBlocks(blocksRaw);
+        const recipe = extractRecipeFromJsonLd(blocks);
+        if (recipe) {
+          setUrlImportRecipe(recipe);
+          setTab("recipes");
+        } else {
+          showToast("Auf dieser Seite wurden keine strukturierten Rezeptdaten gefunden.", "error");
+        }
+      } catch {
+        showToast("Der Import ist fehlgeschlagen.", "error");
+      }
+    }
+
+    function onMessage(e) {
+      if (e.source !== window.opener) return;
+      if (!e.data || e.data.source !== "meine-rezepte-import") return;
+      clearTimeout(timeout);
+      window.removeEventListener("message", onMessage);
+      handleData(e.data.blocks);
+    }
+    window.addEventListener("message", onMessage);
+    // Bereitschaft signalisieren, falls das Bookmarklet noch auf die
+    // "ready"-Nachricht wartet, statt (nur) auf sein Timeout-Fallback.
+    window.opener.postMessage({ source: "meine-rezepte-import-ready" }, "*");
+
+    const timeout = setTimeout(() => {
+      window.removeEventListener("message", onMessage);
+      showToast("Von der Rezeptseite kamen keine Daten an. Bitte erneut versuchen oder den Rezepttext manuell einfügen.", "error");
+    }, 6000);
+
+    return () => { window.removeEventListener("message", onMessage); clearTimeout(timeout); };
   }, []);
 
   const userId = session && session.user ? session.user.id : null;

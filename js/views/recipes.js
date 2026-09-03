@@ -20,11 +20,21 @@ function round2(n) {
 // rohen JSON-LD-Textblöcke (schema.org/Recipe) ein. Die eigentliche
 // Auswertung passiert danach hier in der App (lib/jsonld.js) — bewusst
 // nicht im Bookmarklet dupliziert, damit die Logik zentral bleibt, testbar
-// ist und sich ohne neues Bookmarklet weiterentwickeln lässt. Die
-// App-URL wird zur Laufzeit aus dem aktuellen Standort ermittelt, damit
-// das Bookmarklet unabhängig von der tatsächlichen Domain funktioniert.
+// ist und sich ohne neues Bookmarklet weiterentwickeln lässt.
+//
+// Die Übergabe läuft über postMessage zwischen den beiden Tabs, NICHT über
+// einen URL-Parameter: reale Rezeptseiten (z.B. Chefkoch) bündeln ihre
+// JSON-LD-Daten oft zusammen mit Kommentaren, Video- und
+// Breadcrumb-Metadaten in einem einzigen, teils sehr großen Textblock —
+// das sprengt zuverlässig jede URL-Längengrenze ("414 URI Too Long").
+// postMessage kennt diese Grenze nicht.
+//
+// App-URL und -Origin werden zur Laufzeit aus dem aktuellen Standort
+// ermittelt, damit das Bookmarklet unabhängig von der tatsächlichen
+// Domain funktioniert.
 function buildImportBookmarklet() {
   const appUrl = window.location.origin + window.location.pathname;
+  const appOrigin = window.location.origin;
   const code = "(function(){"
     + "var scripts=document.querySelectorAll('script[type=\"application/ld+json\"]');"
     + "var matched=[];var all=[];"
@@ -32,7 +42,14 @@ function buildImportBookmarklet() {
     + "if(/\"@type\"\\s*:\\s*(?:\\[\\s*)?\"?\\s*Recipe/i.test(t))matched.push(t)});"
     + "var out=matched.length?matched:all.slice(0,5);"
     + "if(!out.length){alert('Keine strukturierten Rezeptdaten (JSON-LD) auf dieser Seite gefunden.');return}"
-    + "window.open('" + appUrl + "?importld='+encodeURIComponent(JSON.stringify(out)),'_blank')"
+    + "var win=window.open('" + appUrl + "?importld=1','_blank');"
+    + "if(!win){alert('Popup wurde blockiert. Bitte Popups fuer diese Seite erlauben und erneut versuchen.');return}"
+    + "var sent=false;"
+    + "function send(){if(sent)return;sent=true;win.postMessage({source:'meine-rezepte-import',blocks:out},'" + appOrigin + "')}"
+    + "window.addEventListener('message',function(e){"
+    + "if(e.source===win&&e.data&&e.data.source==='meine-rezepte-import-ready')send()"
+    + "});"
+    + "setTimeout(send,1500)"
     + "})();";
   return "javascript:" + encodeURIComponent(code);
 }
@@ -400,7 +417,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
                 <summary><${IconLink} strokeWidth="2.2" style="width:16px;height:16px" /> Von einer Rezeptseite importieren (Lesezeichen-Tool)</summary>
                 <p class="hint">Ziehe diesen Link in deine Lesezeichenleiste. Öffne dann auf einer Rezeptseite (mit strukturierten Rezeptdaten) das Lesezeichen — das Rezept wird hier automatisch vorausgefüllt, in einem neuen Tab.</p>
                 <a class="btn btn-secondary btn-sm" style="display:inline-flex" href=${bookmarkletHref} onClick=${(e) => e.preventDefault()}><${IconLink} strokeWidth="2.2" /> Rezept importieren</a>
-                <p class="hint" style="margin-top:8px">Funktioniert nur bei Seiten, die strukturierte Rezeptdaten (schema.org) einbetten — die meisten größeren Rezeptseiten tun das. Bei sehr langen Rezepten kann der Link in seltenen Fällen zu lang werden.</p>
+                <p class="hint" style="margin-top:8px">Funktioniert nur bei Seiten, die strukturierte Rezeptdaten (schema.org) einbetten — die meisten größeren Rezeptseiten tun das. Falls sich ein Popup-Blocker meldet, bitte Popups für die Rezeptseite erlauben und erneut versuchen.</p>
               </details>
             `}
 
