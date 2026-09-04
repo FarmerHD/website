@@ -37,6 +37,25 @@ function stripBullet(line) {
   return line.replace(/^[\s*•\-–—▪]+/, "").trim();
 }
 
+// Entfernt einfache Markdown-Formatierung (Überschriften, Fett/Kursiv), wie
+// sie z.B. von KI-Chats oder Notiz-Apps beim Kopieren von Rezepten erzeugt
+// wird — sonst passt z.B. "### Zutaten" nie exakt auf das Schlüsselwort
+// "zutaten" und die Abschnittserkennung schlägt fehl. Bullet-Listen ("* Zutat")
+// haben nur ein einzelnes "*" pro Zeile und werden hier nicht angefasst, da
+// Fett/Kursiv-Muster zwei "*"/"_" auf derselben Zeile benötigen.
+function stripMarkdown(text) {
+  return (text || "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*\n]+?)\*\*/g, "$1")
+    .replace(/__([^_\n]+?)__/g, "$1")
+    .replace(/\*([^*\n]+?)\*/g, "$1")
+    .replace(/_([^_\n]+?)_/g, "$1");
+}
+
+function stripStepLabel(line) {
+  return line.replace(/^schritt\s*\d+\s*:?\s*/i, "");
+}
+
 export function parseIngredientLine(rawLine) {
   const line = stripBullet(rawLine);
   if (!line) return null;
@@ -80,7 +99,7 @@ export function splitStepsText(text) {
   const paragraphs = normalized.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length > 1) {
     return paragraphs
-      .map((p) => p.split("\n").map((l) => l.replace(/^(?:\d+[.)]|[-•*])\s*/, "").trim()).join(" ").trim())
+      .map((p) => stripStepLabel(p.split("\n").map((l) => l.replace(/^(?:\d+[.)]|[-•*])\s*/, "").trim()).join(" ").trim()))
       .filter(Boolean);
   }
   const lines = normalized.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -89,15 +108,15 @@ export function splitStepsText(text) {
   for (const l of lines) {
     const marked = l.match(/^(?:\d+[.)]|[-•*])\s*(.*)$/);
     if (marked) {
-      if (buffer) steps.push(buffer.trim());
+      if (buffer) steps.push(stripStepLabel(buffer.trim()));
       buffer = marked[1];
     } else if (buffer) {
       buffer = `${buffer} ${l}`;
     } else {
-      steps.push(l);
+      steps.push(stripStepLabel(l));
     }
   }
-  if (buffer) steps.push(buffer.trim());
+  if (buffer) steps.push(stripStepLabel(buffer.trim()));
   return steps.filter(Boolean);
 }
 
@@ -108,17 +127,28 @@ function findSectionIndex(lines, keywords) {
   });
 }
 
+// Wie findSectionIndex, aber erlaubt zusätzlichen Text nach dem Schlüsselwort
+// ("Nährwerte pro Portion") — u.a. für die Nährwerte-Sektion, die oft als
+// Absatz mit Zusatz endet statt als exaktes Einzelwort.
+function findSectionIndexPrefix(lines, prefixes) {
+  return lines.findIndex((l) => {
+    const t = l.trim().toLowerCase().replace(/:$/, "");
+    return prefixes.some((p) => t === p || t.startsWith(`${p} `));
+  });
+}
+
 function extractNumberNear(text, keywordRe) {
   const m = text.match(keywordRe);
   return m ? Number(m[1]) : null;
 }
 
 export function parseRecipeText(text) {
-  const rawLines = text.replace(/\r\n/g, "\n").split("\n").map((l) => l.trim());
+  const rawLines = stripMarkdown(text).replace(/\r\n/g, "\n").split("\n").map((l) => l.trim());
   const lines = rawLines.filter((l) => l.length > 0);
 
   const zutatenIdx = findSectionIndex(lines, ["zutaten"]);
   const zubereitungIdx = findSectionIndex(lines, ["zubereitung", "zubereitungsschritte", "anleitung"]);
+  const naehrwerteIdx = findSectionIndexPrefix(lines, ["nährwerte", "naehrwerte", "nährwertangaben"]);
 
   const headerLines = lines.slice(0, zutatenIdx >= 0 ? zutatenIdx : lines.length);
   const headerText = headerLines.join("\n");
@@ -153,7 +183,8 @@ export function parseRecipeText(text) {
     .filter(Boolean);
 
   if (zubereitungIdx >= 0) {
-    const stepLines = lines.slice(zubereitungIdx + 1);
+    const stepEnd = naehrwerteIdx >= 0 && naehrwerteIdx > zubereitungIdx ? naehrwerteIdx : lines.length;
+    const stepLines = lines.slice(zubereitungIdx + 1, stepEnd);
     result.steps = splitStepsText(stepLines.join("\n"));
   }
 
