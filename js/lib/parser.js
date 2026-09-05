@@ -13,6 +13,10 @@ const UNIT_ALIASES = {
   kg: "kg", kilo: "kg", kilogramm: "kg",
   ml: "ml", milliliter: "ml",
   l: "l", liter: "l",
+  prise: "Prise", prisen: "Prise",
+  zehe: "Zehe", zehen: "Zehe",
+  bund: "Bund",
+  dose: "Dose", dosen: "Dose",
 };
 const UNIT_LOOKUP = new Map(UNITS.map((u) => [u.toLowerCase(), u]));
 for (const [alias, unit] of Object.entries(UNIT_ALIASES)) UNIT_LOOKUP.set(alias, unit);

@@ -26,7 +26,7 @@ export function StatsView({ cookLog, onCookLogChange, showToast }) {
 
   return html`
     <div>
-      <div class="desktop-header"><h1>Statistik &amp; Rückblick</h1></div>
+      <div class="desktop-header"><h1>Statistik & Rückblick</h1></div>
 
       ${cookLog.length === 0 ? html`
         <div class="empty-state">

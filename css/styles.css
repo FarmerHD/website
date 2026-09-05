@@ -380,6 +380,24 @@ input[type="checkbox"].check:checked::after{
 .spinner-page{display:flex;align-items:center;justify-content:center;min-height:60vh}
 
 /* ============================================================
+   Update-Hinweis (neue Version im Service Worker bereit)
+   ============================================================ */
+.update-banner{
+  position:fixed;left:16px;right:16px;bottom:calc(var(--tabbar-h) + 14px);z-index:85;
+  display:flex;align-items:center;gap:10px;
+  margin:0 auto;max-width:440px;
+  background:var(--primary);color:#fff;
+  padding:10px 10px 10px 16px;border-radius:var(--radius-pill);
+  font-size:13.5px;font-weight:500;box-shadow:var(--shadow-lg);
+}
+.update-banner span{flex:1}
+.update-banner .btn-primary{background:#fff;color:var(--primary-dark)}
+.update-banner .btn-primary:hover{background:#fff;opacity:.9}
+.update-banner .btn-ghost{color:#fff;padding:6px}
+.update-banner .btn-ghost:hover{background:rgba(255,255,255,.15)}
+@media (min-width:960px){.update-banner{bottom:20px}}
+
+/* ============================================================
    Toast
    ============================================================ */
 .toast-stack{position:fixed;left:0;right:0;bottom:calc(var(--tabbar-h) + 14px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding:0 16px}

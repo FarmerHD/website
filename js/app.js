@@ -56,6 +56,25 @@ function App() {
   const [toasts, showToast] = useToasts();
   const [legalOpen, setLegalOpen] = useState(false);
   const [urlImportRecipe, setUrlImportRecipe] = useState(null);
+  const [updateReady, setUpdateReady] = useState(false);
+
+  // Service Worker registrieren und melden, wenn eine neuere Version
+  // bereitliegt. Ohne diesen Hinweis würden Nutzer eine ausgelieferte
+  // Korrektur erst beim übernächsten Öffnen sehen, ohne zu wissen, warum.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const fresh = reg.installing;
+        if (!fresh) return;
+        fresh.addEventListener("statechange", () => {
+          // controller vorhanden = es lief schon eine ältere Version,
+          // das hier ist also ein Update und keine Erstinstallation.
+          if (fresh.state === "installed" && navigator.serviceWorker.controller) setUpdateReady(true);
+        });
+      });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!legalOpen) return;
@@ -236,6 +255,14 @@ function App() {
         </nav>
       </div>
 
+      ${updateReady && html`
+        <div class="update-banner">
+          <span>Eine neuere Version ist bereit.</span>
+          <button class="btn btn-sm btn-primary" onClick=${() => window.location.reload()}>Neu laden</button>
+          <button class="btn btn-sm btn-ghost" onClick=${() => setUpdateReady(false)} aria-label="Hinweis ausblenden"><${IconX} strokeWidth="2.4" /></button>
+        </div>
+      `}
+
       <div class="toast-stack">
         ${toasts.map((t) => html`
           <div class="toast ${t.type}" key=${t.id}>
@@ -251,9 +278,3 @@ function App() {
 }
 
 render(html`<${App} />`, document.getElementById("root"));
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  });
-}

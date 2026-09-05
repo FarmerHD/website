@@ -82,22 +82,43 @@ function beep() {
   }
 }
 
+// Der Timer rechnet gegen einen festen Ziel-Zeitpunkt statt sekundenweise
+// herunterzuzählen: Browser drosseln Timer in Hintergrund-Tabs stark (oft
+// auf einmal pro Minute), und genau das passiert beim Kochen ständig —
+// eine Zähl-Schleife würde dann deutlich nachgehen. So stimmt die
+// Restzeit auch nach einem Ausflug in eine andere App.
 function StepTimer({ minutes }) {
   const total = minutes * 60;
   const [remaining, setRemaining] = useState(total);
   const [running, setRunning] = useState(false);
+  const deadlineRef = useRef(null);
 
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) {
-      setRunning(false);
-      beep();
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      return;
+    function tick() {
+      const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
+      setRemaining(left);
+      if (left === 0) {
+        setRunning(false);
+        beep();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      }
     }
-    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(t);
-  }, [running, remaining]);
+    tick();
+    const iv = setInterval(tick, 500);
+    // Beim Zurückkehren in die App sofort neu rechnen, statt bis zum
+    // nächsten Intervall eine veraltete Zeit anzuzeigen.
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [running]);
+
+  function start() {
+    deadlineRef.current = Date.now() + remaining * 1000;
+    setRunning(true);
+  }
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
@@ -110,7 +131,7 @@ function StepTimer({ minutes }) {
       ${finished
         ? html`<span>Fertig!</span>`
         : html`
-          <button type="button" class="btn-link" onClick=${() => setRunning((r) => !r)}>${running ? "Pause" : remaining === total ? "Start" : "Weiter"}</button>
+          <button type="button" class="btn-link" onClick=${() => (running ? setRunning(false) : start())}>${running ? "Pause" : remaining === total ? "Start" : "Weiter"}</button>
           ${remaining !== total && html`<button type="button" class="btn-link" onClick=${() => { setRunning(false); setRemaining(total); }}>Reset</button>`}
         `}
     </div>
@@ -178,8 +199,10 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
               <input type="checkbox" class="check" checked=${checked[i]} onChange=${() => toggle(i)} />
               <div class="cookmode-step-body">
                 <span class="step-num">${i + 1}</span>
-                <p>${s}</p>
-                ${mins && html`<${StepTimer} minutes=${mins} />`}
+                <div>
+                  <p>${s}</p>
+                  ${mins && html`<${StepTimer} minutes=${mins} />`}
+                </div>
               </div>
             </label>
           `;
@@ -321,8 +344,22 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   const [importOpen, setImportOpen] = useState(false);
   const [importHint, setImportHint] = useState(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef(null);
   const bookmarkletHref = useMemo(() => buildImportBookmarklet(), []);
+
+  // Schutz vor versehentlichem Verwerfen: Ein Klick neben das Formular hat
+  // vorher wortlos alle Eingaben weggeworfen. Verglichen wird gegen den
+  // Anfangszustand, damit reines Öffnen und Schließen nicht nachfragt.
+  // Die Datei selbst lässt sich nicht serialisieren — ihr Name genügt zur
+  // Erkennung, weil er sich beim Auswählen eines Fotos mitändert.
+  const snapshot = (f, text) => JSON.stringify({ ...f, imageFile: f.imageFile ? f.imageFile.name : null, importText: text });
+  const initialSnapshot = useRef(null);
+  if (initialSnapshot.current === null) initialSnapshot.current = snapshot(form, "");
+
+  function requestClose() {
+    const dirty = snapshot(form, importText) !== initialSnapshot.current;
+    if (dirty && !window.confirm("Änderungen verwerfen? Deine Eingaben gehen verloren.")) return;
+    onClose();
+  }
 
   function runImport() {
     if (!importText.trim()) return;
@@ -392,10 +429,10 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   }
 
   return html`
-    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
+    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && requestClose()}>
       <div class="sheet wide">
         <div class="sheet-header">
-          <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Schließen"><${IconX} /></button>
+          <button class="btn btn-icon btn-ghost" onClick=${requestClose} aria-label="Schließen"><${IconX} /></button>
           <h2>${isEdit ? "Rezept bearbeiten" : "Neues Rezept"}</h2>
         </div>
         <form onSubmit=${submit}>
@@ -429,7 +466,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
                   <span class="btn btn-secondary btn-sm">Foto auswählen</span>
                   <p class="hint" style="margin-top:6px">Upload benötigt eine Internetverbindung.</p>
                 </div>
-                <input ref=${fileRef} type="file" accept="image/*" style="display:none" onChange=${onPickFile} />
+                <input type="file" accept="image/*" style="display:none" onChange=${onPickFile} />
               </label>
             </div>
 
@@ -504,7 +541,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
             </div>
           </div>
           <div class="sheet-foot">
-            <button type="button" class="btn btn-secondary" onClick=${onClose}>Abbrechen</button>
+            <button type="button" class="btn btn-secondary" onClick=${requestClose}>Abbrechen</button>
             <button type="submit" class="btn btn-primary" disabled=${saving}>${saving ? "Speichert …" : "Rezept speichern"}</button>
           </div>
         </form>
