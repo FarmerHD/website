@@ -13,6 +13,63 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])';
+
+// Offene Dialoge in Öffnungsreihenfolge. Aus der Detailansicht heraus lässt
+// sich der Kochmodus öffnen; ohne diesen Stapel würde Escape dann beide auf
+// einmal schließen, statt nur den obersten.
+const modalStack = [];
+
+// Gemeinsames Verhalten aller Overlays: Escape schließt, die Seite dahinter
+// scrollt nicht mit, der Fokus startet im Dialog und bleibt beim Tabben
+// darin. Gibt die Referenz zurück, die an das Dialog-Element gehört.
+function useModal(onClose) {
+  const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const token = {};
+    modalStack.push(token);
+
+    function onKey(e) {
+      if (modalStack[modalStack.length - 1] !== token) return;
+      if (e.key === "Escape") {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !ref.current) return;
+      const items = [...ref.current.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const previouslyFocused = document.activeElement;
+    if (ref.current) ref.current.focus();
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      document.body.style.overflow = prevOverflow;
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+    };
+  }, []);
+
+  return ref;
+}
+
 // Baut das Lesezeichen-Tool ("Bookmarklet"), mit dem sich Rezepte von
 // beliebigen Webseiten importieren lassen — ganz ohne eigenen Server:
 // Das Bookmarklet läuft im Kontext der fremden Rezeptseite (kein
@@ -52,6 +109,35 @@ function buildImportBookmarklet() {
     + "setTimeout(send,1500)"
     + "})();";
   return "javascript:" + encodeURIComponent(code);
+}
+
+const PHOTO_MAX_EDGE = 1600;
+const PHOTO_QUALITY = 0.82;
+
+// Handyfotos sind schnell 3–8 MB groß. Unverkleinert hochgeladen dauert das
+// über Mobilfunk spürbar und füllt den Speicherplatz unnötig — für ein
+// Rezeptbild reichen 1600 px lange Kante. Schlägt das Umwandeln fehl (altes
+// Gerät, exotisches Format), wird die Originaldatei hochgeladen.
+async function shrinkImage(file) {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 600 * 1024) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", PHOTO_QUALITY));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
 }
 
 // Sucht in einem Zubereitungsschritt nach einer Zeitangabe ("10 Minuten",
@@ -142,6 +228,7 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   const steps = recipe.steps || [];
   const [checked, setChecked] = useState(() => steps.map(() => false));
   const wakeLockRef = useRef(null);
+  const dialogRef = useModal(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,7 +261,7 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   const doneCount = checked.filter(Boolean).length;
 
   return html`
-    <div class="cookmode-overlay">
+    <div class="cookmode-overlay" role="dialog" aria-modal="true" aria-label=${`Kochmodus: ${recipe.name}`} tabindex="-1" ref=${dialogRef}>
       <div class="cookmode-header">
         <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Kochmodus verlassen"><${IconX} /></button>
         <span class="cookmode-title">${recipe.name}</span>
@@ -218,7 +305,7 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
 function RecipeCard({ recipe, onOpen }) {
   return html`
     <button class="recipe-card" onClick=${() => onOpen(recipe)}>
-      <div class="recipe-thumb">
+      <div class="recipe-thumb ${recipe.image_url ? "" : "empty"}">
         ${recipe.image_url
           ? html`<img src=${recipe.image_url} alt="" loading="lazy" />`
           : html`<${IconLeaf} />`}
@@ -361,6 +448,8 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
     onClose();
   }
 
+  const dialogRef = useModal(requestClose);
+
   function runImport() {
     if (!importText.trim()) return;
     const parsed = parseRecipeText(importText);
@@ -386,8 +475,9 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
       if (!navigator.onLine) {
         showToast("Kein Foto-Upload ohne Verbindung — Rezept wird ohne neues Foto gespeichert.", "error");
       } else {
-        const path = `${crypto.randomUUID()}-${form.imageFile.name}`.replace(/\s+/g, "_");
-        const { error: upErr } = await sb.storage.from("recipe-photos").upload(path, form.imageFile, { upsert: true });
+        const file = await shrinkImage(form.imageFile);
+        const path = `${crypto.randomUUID()}-${file.name}`.replace(/\s+/g, "_");
+        const { error: upErr } = await sb.storage.from("recipe-photos").upload(path, file, { upsert: true });
         if (upErr) {
           showToast("Foto-Upload fehlgeschlagen: " + upErr.message, "error");
         } else {
@@ -430,7 +520,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
 
   return html`
     <div class="overlay" onClick=${(e) => e.target === e.currentTarget && requestClose()}>
-      <div class="sheet wide">
+      <div class="sheet wide" role="dialog" aria-modal="true" aria-label=${isEdit ? "Rezept bearbeiten" : "Neues Rezept"} tabindex="-1" ref=${dialogRef}>
         <div class="sheet-header">
           <button class="btn btn-icon btn-ghost" onClick=${requestClose} aria-label="Schließen"><${IconX} /></button>
           <h2>${isEdit ? "Rezept bearbeiten" : "Neues Rezept"}</h2>
@@ -554,6 +644,7 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [portions, setPortions] = useState(recipe.portions);
   const [cookModeOpen, setCookModeOpen] = useState(false);
+  const dialogRef = useModal(onClose);
   const totalTime = (Number(recipe.prep_time) || 0) + (Number(recipe.cook_time) || 0);
   const ratio = portions / (Number(recipe.portions) || 1);
   if (cookModeOpen) {
@@ -561,7 +652,7 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
   }
   return html`
     <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
-      <div class="sheet wide">
+      <div class="sheet wide" role="dialog" aria-modal="true" aria-label=${recipe.name} tabindex="-1" ref=${dialogRef}>
         <div class="sheet-header">
           <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Schließen"><${IconX} /></button>
           <h2 style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${recipe.name}</h2>
@@ -578,7 +669,7 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
               </span>
             </div>
           `}
-          <div class="recipe-detail-photo">
+          <div class="recipe-detail-photo ${recipe.image_url ? "" : "empty"}">
             ${recipe.image_url ? html`<img src=${recipe.image_url} />` : html`<${IconLeaf} />`}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">

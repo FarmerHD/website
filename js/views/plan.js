@@ -2,7 +2,7 @@ import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { mergeLines, canMerge } from "../lib/categorize.js";
 import { CATEGORY_STYLE, WEEKDAYS } from "../lib/constants.js";
-import { IconCart, IconCalendar } from "../lib/icons.js";
+import { IconCart, IconCalendar, IconSearch } from "../lib/icons.js";
 
 function renderSnapshotWeek(items) {
   const byDay = new Map(WEEKDAYS.map((d) => [d, []]));
@@ -37,12 +37,24 @@ function renderSnapshotWeek(items) {
 
 export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, planSnapshot, onPlanSnapshotChange, showToast, userId }) {
   const [generating, setGenerating] = useState(false);
+  const [search, setSearch] = useState("");
   const [mode, setMode] = useState("plan"); // "plan" | "view" — je Fenster/Tab unabhängig, bewusst nicht gespeichert
 
   const rows = useMemo(() => recipes.map((r) => {
     const p = planItems.find((pi) => pi.recipe_id === r.id);
     return { recipe: r, selected: p ? p.selected : false, portions: p ? p.portions : r.portions, weekday: p ? p.weekday || "" : "" };
   }), [recipes, planItems]);
+
+  // Ausgewählte immer oben: Sonst rutschen sie beim Scrollen durch eine
+  // längere Rezeptliste aus dem Blick, obwohl man sie gerade zusammenstellt.
+  // Die Suche daneben macht die Liste ab ein paar Dutzend Rezepten erst
+  // benutzbar.
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows
+      .filter((r) => r.selected || q === "" || r.recipe.name.toLowerCase().includes(q))
+      .sort((a, b) => (a.selected === b.selected ? 0 : a.selected ? -1 : 1));
+  }, [rows, search]);
 
   const selectedRows = [...rows.filter((r) => r.selected)].sort((a, b) => {
     const ia = a.weekday ? WEEKDAYS.indexOf(a.weekday) : 99;
@@ -195,8 +207,15 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
             <p>Lege zuerst ein paar Rezepte an, dann kannst du hier deine Woche zusammenstellen.</p>
           </div>
         ` : html`
+          <div class="filter-bar">
+            <div class="search-input">
+              <${IconSearch} strokeWidth="2.2" />
+              <input class="input" placeholder="Rezepte durchsuchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          ${visibleRows.length === 0 && html`<p class="hint" style="margin-bottom:18px">Kein Rezept gefunden.</p>`}
           <div class="plan-list">
-            ${rows.map(({ recipe, selected, portions, weekday }) => html`
+            ${visibleRows.map(({ recipe, selected, portions, weekday }) => html`
               <div class="plan-row ${selected ? "selected" : ""}" key=${recipe.id}>
                 <label class="checkbox-row" style="flex:0">
                   <input type="checkbox" class="check" checked=${selected} onChange=${() => toggle(recipe)} />

@@ -487,6 +487,8 @@ input[type="checkbox"].check:checked::after{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;
 }
 @media (min-width:640px){.recipe-grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}}
+/* Platz für den schwebenden +-Button, der sonst die letzte Kartenreihe überdeckt. */
+@media (max-width:959px){.recipe-grid,.recipes-empty{padding-bottom:64px}}
 
 .recipe-card{
   display:flex;flex-direction:column;
@@ -510,6 +512,12 @@ input[type="checkbox"].check:checked::after{
 .recipe-detail-photo{width:100%;aspect-ratio:16/10;border-radius:var(--radius-md);background:var(--primary-mist);overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
 .recipe-detail-photo img{width:100%;height:100%;object-fit:cover}
 .recipe-detail-photo svg{width:42px;height:42px;color:var(--primary);opacity:.4}
+/* Ohne Foto schob der Platzhalter im Bildformat die Zutaten weit nach unten —
+   ohne dass es etwas zu sehen gäbe. Dann reicht ein schmaler Streifen. */
+.recipe-detail-photo.empty{aspect-ratio:auto;height:76px}
+.recipe-detail-photo.empty svg{width:26px;height:26px}
+.recipe-thumb.empty{aspect-ratio:16/6}
+.recipe-thumb.empty svg{width:22px;height:22px}
 .recipe-meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .meta-tile{display:flex;flex-direction:column;gap:2px;background:var(--paper-soft);border-radius:var(--radius-sm);padding:9px 14px;flex:1;min-width:88px}
 .meta-tile .n{font-weight:700;font-size:15px}
@@ -649,10 +657,16 @@ input[type="checkbox"].check:checked::after{
 .add-item-form .input[type=number]{flex:1;min-width:70px}
 .add-item-form .input[type=date]{flex:1;min-width:150px;color:var(--ink-soft)}
 .add-item-form .select{flex:1;min-width:90px}
+/* Beschriftetes Feld im Formular: Ein nacktes Datumsfeld zeigt nur "TT.MM.JJJJ"
+   und verrät nicht, wofür das Datum steht. */
+.add-item-form .field-inline{flex:1;min-width:150px;display:flex;flex-direction:column;gap:3px}
+.add-item-form .field-inline > span{font-size:11.5px;font-weight:600;color:var(--ink-faint);padding-left:2px}
+.add-item-form .field-inline .input[type=date]{flex:none;min-width:0;width:100%}
 @media (max-width:479px){
   .add-item-form .input:not([type=number]){flex-basis:100%}
   .add-item-form .input[type=number]{min-width:0}
   .add-item-form .select.select-location{flex-basis:100%}
+  .add-item-form .field-inline{flex-basis:100%}
   .add-item-form .btn{flex:1}
 }
 
