@@ -2,11 +2,12 @@ import { html, useState, useEffect, useMemo, useRef } from "../lib/preact.js";
 import { supabaseClient as sb } from "../config.js";
 import { write, newId } from "../lib/offline.js";
 import { CATEGORIES, CATEGORY_STYLE, UNITS } from "../lib/constants.js";
+import { canMerge, mergedAmountUnit } from "../lib/categorize.js";
 import { parseRecipeText, splitStepsText } from "../lib/parser.js";
 import { formatRelativeDate } from "../lib/format.js";
 import {
   IconSearch, IconPlus, IconX, IconEdit, IconTrash, IconClock, IconUsers,
-  IconCamera, IconLeaf, IconSparkle, IconFlame, IconPlay, IconTimer, IconLink,
+  IconCamera, IconLeaf, IconSparkle, IconFlame, IconPlay, IconTimer, IconLink, IconHeart, IconCart,
 } from "../lib/icons.js";
 
 function round2(n) {
@@ -302,8 +303,24 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   `;
 }
 
-function RecipeCard({ recipe, onOpen }) {
+// Gesucht wird über Name, Zutaten und Notizen — "was kann ich mit Zucchini
+// kochen?" ist die häufigste Frage an eine Rezeptsammlung, und die
+// beantwortet ein reiner Namensvergleich nicht.
+function matchesQuery(recipe, q) {
+  if ((recipe.name || "").toLowerCase().includes(q)) return true;
+  if ((recipe.ingredients || []).some((i) => (i.name || "").toLowerCase().includes(q))) return true;
+  return (recipe.notes || "").toLowerCase().includes(q);
+}
+
+function RecipeCard({ recipe, onOpen, onToggleFavorite }) {
   return html`
+    <div class="recipe-card-wrap">
+    <button
+      class="fav-btn ${recipe.is_favorite ? "on" : ""}"
+      onClick=${() => onToggleFavorite(recipe)}
+      aria-pressed=${recipe.is_favorite ? "true" : "false"}
+      aria-label=${recipe.is_favorite ? `„${recipe.name}“ aus den Favoriten entfernen` : `„${recipe.name}“ zu den Favoriten`}
+    ><${IconHeart} strokeWidth="2.2" /></button>
     <button class="recipe-card" onClick=${() => onOpen(recipe)}>
       <div class="recipe-thumb ${recipe.image_url ? "" : "empty"}">
         ${recipe.image_url
@@ -320,6 +337,7 @@ function RecipeCard({ recipe, onOpen }) {
         </div>
       </div>
     </button>
+    </div>
   `;
 }
 
@@ -640,7 +658,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   `;
 }
 
-function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCookedAt }) {
+function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, onToggleFavorite, onAddToShopping, lastCookedAt }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [portions, setPortions] = useState(recipe.portions);
   const [cookModeOpen, setCookModeOpen] = useState(false);
@@ -656,6 +674,12 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
         <div class="sheet-header">
           <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Schließen"><${IconX} /></button>
           <h2 style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${recipe.name}</h2>
+          <button
+            class="btn btn-icon btn-ghost fav-icon ${recipe.is_favorite ? "on" : ""}"
+            onClick=${() => onToggleFavorite(recipe)}
+            aria-pressed=${recipe.is_favorite ? "true" : "false"}
+            aria-label=${recipe.is_favorite ? "Aus den Favoriten entfernen" : "Zu den Favoriten"}
+          ><${IconHeart} /></button>
           <button class="btn btn-icon btn-ghost" onClick=${() => onEdit(recipe)} aria-label="Bearbeiten"><${IconEdit} /></button>
           <button class="btn btn-icon btn-ghost" onClick=${() => setConfirmDelete(true)} aria-label="Löschen"><${IconTrash} /></button>
         </div>
@@ -676,6 +700,7 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
             <div class="badge" style="background:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"}-soft);color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               ${lastCookedAt && html`<span class="hint">Zuletzt gekocht: ${formatRelativeDate(lastCookedAt)}</span>`}
+              <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onAddToShopping(recipe, ratio)}><${IconCart} strokeWidth="2.2" /> Auf die Einkaufsliste</button>
               <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onMarkCooked(recipe)}><${IconFlame} strokeWidth="2.2" /> Heute gekocht</button>
               ${(recipe.steps || []).length > 0 && html`<button type="button" class="btn btn-accent btn-sm" onClick=${() => setCookModeOpen(true)}><${IconPlay} strokeWidth="2.2" /> Kochmodus</button>`}
             </div>
@@ -725,9 +750,10 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
   `;
 }
 
-export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, onCookLogChange, urlImportRecipe, onUrlImportConsumed, showToast, userId }) {
+export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, onCookLogChange, shoppingItems, onShoppingChange, urlImportRecipe, onUrlImportConsumed, showToast, userId }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Alle");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [openForm, setOpenForm] = useState(null); // null | 'new' | recipe
   const [openDetail, setOpenDetail] = useState(null);
 
@@ -740,9 +766,10 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
     const q = search.trim().toLowerCase();
     return recipes.filter((r) =>
       (category === "Alle" || r.category === category) &&
-      (q === "" || r.name.toLowerCase().includes(q))
+      (!favoritesOnly || r.is_favorite) &&
+      (q === "" || matchesQuery(r, q))
     );
-  }, [recipes, search, category]);
+  }, [recipes, search, category, favoritesOnly]);
 
   const lastCookedByRecipe = useMemo(() => {
     const map = new Map();
@@ -774,6 +801,64 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
     else showToast(queued ? "Gelöscht — wird synchronisiert." : "Rezept gelöscht.", "success");
   }
 
+  // Zutaten direkt aufs Einkaufszettel legen, ohne den Umweg über den
+  // Wochenplan. Gleichnamiges wird wie dort zusammengeführt, damit nicht
+  // zwei Zeilen "Mehl" nebeneinander stehen.
+  async function addToShopping(recipe, ratio) {
+    const lines = (recipe.ingredients || [])
+      .filter((i) => (i.name || "").trim())
+      .map((i) => ({ name: i.name.trim(), amount: round2((Number(i.amount) || 0) * ratio), unit: i.unit }));
+    if (lines.length === 0) {
+      showToast("Dieses Rezept hat keine Zutaten hinterlegt.", "error");
+      return;
+    }
+
+    let next = [...shoppingItems];
+    const writes = [];
+    let merged = 0;
+    for (const line of lines) {
+      const existing = next.find((it) => canMerge(it, line));
+      if (existing) {
+        const { amount, unit } = mergedAmountUnit(existing, line);
+        const from_recipes = existing.from_recipes && existing.from_recipes.includes(recipe.name)
+          ? existing.from_recipes
+          : [...(existing.from_recipes || []), recipe.name];
+        next = next.map((it) => (it.id === existing.id ? { ...it, amount, unit, from_recipes } : it));
+        writes.push(["update", { amount, unit, from_recipes }, { id: existing.id }]);
+        merged++;
+      } else {
+        const item = { id: newId(), user_id: userId, name: line.name, amount: line.amount, unit: line.unit, checked: false, from_recipes: [recipe.name] };
+        next = [...next, item];
+        writes.push(["insert", item, null]);
+      }
+    }
+    onShoppingChange(next);
+
+    let failed = 0;
+    for (const [op, payload, match] of writes) {
+      const { error } = await write("shopping_items", op, payload, match);
+      if (error) failed++;
+    }
+    if (failed > 0) {
+      showToast(`${failed} von ${writes.length} Artikeln konnten nicht gespeichert werden.`, "error");
+      return;
+    }
+    showToast(merged > 0
+      ? `${lines.length} Zutaten übernommen (${merged} zusammengeführt).`
+      : `${lines.length} Zutaten auf die Einkaufsliste gelegt.`, "success");
+  }
+
+  async function toggleFavorite(recipe) {
+    const is_favorite = !recipe.is_favorite;
+    onUpdate({ ...recipe, is_favorite });
+    if (openDetail && openDetail.id === recipe.id) setOpenDetail({ ...openDetail, is_favorite });
+    const { error } = await write("recipes", "update", { is_favorite }, { id: recipe.id });
+    if (error) {
+      onUpdate({ ...recipe, is_favorite: !is_favorite });
+      showToast("Konnte Favorit nicht speichern: " + error.message, "error");
+    }
+  }
+
   async function markCooked(recipe) {
     const entry = { id: newId(), user_id: userId, recipe_id: recipe.id, recipe_name: recipe.name, cooked_at: new Date().toISOString() };
     onCookLogChange([entry, ...cookLog]);
@@ -793,11 +878,14 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
       <div class="filter-bar">
         <div class="search-input">
           <${IconSearch} strokeWidth="2.2" />
-          <input class="input" placeholder="Rezepte durchsuchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
+          <input class="input" placeholder="Rezept, Zutat oder Notiz suchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
         </div>
       </div>
       <div class="category-scroll" style="margin-bottom:18px">
         <button class="cat-pill ${category === "Alle" ? "active" : ""}" onClick=${() => setCategory("Alle")}>Alle</button>
+        <button class="cat-pill fav-pill ${favoritesOnly ? "active" : ""}" onClick=${() => setFavoritesOnly((v) => !v)} aria-pressed=${favoritesOnly ? "true" : "false"}>
+          <${IconHeart} strokeWidth="2.4" /> Favoriten
+        </button>
         ${CATEGORIES.map((c) => html`<button class="cat-pill ${category === c ? "active" : ""}" onClick=${() => setCategory(c)}>${c}</button>`)}
       </div>
 
@@ -809,7 +897,7 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
         </div>
       ` : html`
         <div class="recipe-grid">
-          ${filtered.map((r) => html`<${RecipeCard} key=${r.id} recipe=${r} onOpen=${setOpenDetail} />`)}
+          ${filtered.map((r) => html`<${RecipeCard} key=${r.id} recipe=${r} onOpen=${setOpenDetail} onToggleFavorite=${toggleFavorite} />`)}
         </div>
       `}
 
@@ -832,6 +920,8 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
           onEdit=${(r) => setOpenForm(r)}
           onDelete=${handleDelete}
           onMarkCooked=${markCooked}
+          onToggleFavorite=${toggleFavorite}
+          onAddToShopping=${addToShopping}
           lastCookedAt=${lastCookedByRecipe.get(openDetail.id)}
         />
       `}

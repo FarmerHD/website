@@ -490,6 +490,27 @@ input[type="checkbox"].check:checked::after{
 /* Platz für den schwebenden +-Button, der sonst die letzte Kartenreihe überdeckt. */
 @media (max-width:959px){.recipe-grid,.recipes-empty{padding-bottom:64px}}
 
+/* Der Favoriten-Knopf liegt über der Karte statt in ihr: Die Karte ist
+   selbst ein Button, und ein Button im Button ist ungültiges HTML. */
+.recipe-card-wrap{position:relative;display:flex}
+.recipe-card-wrap > .recipe-card{flex:1;min-width:0}
+.fav-btn{
+  position:absolute;top:8px;right:8px;z-index:2;
+  width:32px;height:32px;border-radius:99px;border:none;padding:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:rgba(255,255,255,.82);color:var(--ink-faint);
+  box-shadow:var(--shadow-sm);transition:color .15s ease, background .15s ease;
+}
+.fav-btn svg{width:17px;height:17px}
+.fav-btn:hover{background:#fff;color:var(--accent)}
+.fav-btn.on{color:var(--accent)}
+.fav-btn.on svg{fill:currentColor}
+.fav-icon.on{color:var(--accent)}
+.fav-icon.on svg{fill:currentColor}
+.cat-pill.fav-pill{display:inline-flex;align-items:center;gap:5px}
+.cat-pill.fav-pill svg{width:14px;height:14px}
+.cat-pill.fav-pill.active svg{fill:currentColor}
+
 .recipe-card{
   display:flex;flex-direction:column;
   background:var(--paper);border:1px solid var(--border);border-radius:var(--radius-md);

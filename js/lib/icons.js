@@ -14,6 +14,7 @@ export const IconBook = wrap(() => html`<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20
 export const IconCalendar = wrap(() => html`<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18"/>`);
 export const IconCart = wrap(() => html`<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.2l2.2 12.1a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.6L21 7H6"/>`);
 export const IconSearch = wrap(() => html`<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>`);
+export const IconHeart = wrap(() => html`<path d="M12 20.5 3.9 12.6a5 5 0 0 1 7.1-7.1l1 1 1-1a5 5 0 0 1 7.1 7.1Z"/>`);
 export const IconPlus = wrap(() => html`<path d="M12 5v14M5 12h14"/>`);
 export const IconX = wrap(() => html`<path d="M18 6 6 18M6 6l12 12"/>`);
 export const IconEdit = wrap(() => html`<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>`);

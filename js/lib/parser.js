@@ -146,6 +146,37 @@ function extractNumberNear(text, keywordRe) {
   return m ? Number(m[1]) : null;
 }
 
+// Liest die Nährwerte aus dem "Nährwerte"-Abschnitt. Bewusst nur von dort und
+// nicht aus dem ganzen Text — sonst würde z.B. eine Backtemperatur oder eine
+// Mengenangabe als Kalorienzahl durchgehen. Beide üblichen Schreibweisen
+// werden abgedeckt: "450 kcal" und "Kalorien: 450", "12 g Eiweiß" und
+// "Eiweiß: 12 g".
+// Der Zahl-vor-Name-Fall darf NICHT über Zeilenumbrüche greifen: Bei
+// zeilenweise notierten Werten ("Eiweiß: 9 g" / "Kohlenhydrate: 44 g")
+// würde \s* sonst das "9 g" der einen Zeile an den Nährstoffnamen der
+// nächsten binden. SP steht daher nur für Leerzeichen und Tabs.
+const DECIMAL = "(\\d+(?:[.,]\\d+)?)";
+const SP = "[ \\t]*";
+function firstNumber(text, patterns) {
+  for (const p of patterns) {
+    const m = text.match(new RegExp(p, "i"));
+    if (m) {
+      const n = parseFloat(m[1].replace(",", "."));
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return null;
+}
+
+function parseNutrition(text) {
+  return {
+    calories: firstNumber(text, [`${DECIMAL}${SP}kcal`, `(?:kalorien|energie)\\D{0,12}${DECIMAL}`]),
+    protein_g: firstNumber(text, [`${DECIMAL}${SP}g${SP}(?:eiwei(?:ß|ss)|protein)`, `(?:eiwei(?:ß|ss)|protein)\\D{0,12}${DECIMAL}`]),
+    carbs_g: firstNumber(text, [`${DECIMAL}${SP}g${SP}kohlenhydrate`, `kohlenhydrate\\D{0,12}${DECIMAL}`]),
+    fat_g: firstNumber(text, [`${DECIMAL}${SP}g${SP}fett`, `fett\\D{0,12}${DECIMAL}`]),
+  };
+}
+
 export function parseRecipeText(text) {
   const rawLines = stripMarkdown(text).replace(/\r\n/g, "\n").split("\n").map((l) => l.trim());
   const lines = rawLines.filter((l) => l.length > 0);
@@ -176,6 +207,7 @@ export function parseRecipeText(text) {
     ingredients: [],
     steps: [],
     hasIngredientsSection: zutatenIdx >= 0,
+    ...(naehrwerteIdx >= 0 ? parseNutrition(lines.slice(naehrwerteIdx).join("\n")) : {}),
   };
 
   if (zutatenIdx < 0) return result;
