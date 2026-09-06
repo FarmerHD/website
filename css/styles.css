@@ -670,6 +670,18 @@ input[type="checkbox"].check:checked::after{
   .add-item-form .btn{flex:1}
 }
 
+/* ============================================================
+   Wochenauswahl im Wochenplan
+   ============================================================ */
+.week-picker{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.week-picker .btn-icon{flex-shrink:0;font-size:20px;font-weight:600;line-height:1;color:var(--ink-soft)}
+.week-picker-label{flex:1;text-align:center;display:flex;flex-direction:column;gap:1px;min-width:0}
+.week-picker-label b{font-size:15px;color:var(--primary-dark)}
+.week-picker-label span{font-size:12.5px;color:var(--ink-faint)}
+.week-heading{display:flex;flex-direction:column;gap:1px;margin-bottom:16px}
+.week-heading b{font-family:var(--font-display);font-size:19px;color:var(--primary-dark)}
+.week-heading span{font-size:13px;color:var(--ink-faint)}
+
 .shop-group{margin-bottom:22px}
 .shop-group-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .shop-group-head .sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}

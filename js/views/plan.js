@@ -2,6 +2,7 @@ import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { mergeLines, canMerge } from "../lib/categorize.js";
 import { CATEGORY_STYLE, WEEKDAYS } from "../lib/constants.js";
+import { startOfWeek, toDateKey, addWeeks, formatWeekRange, relativeWeekLabel } from "../lib/format.js";
 import { IconCart, IconCalendar, IconSearch } from "../lib/icons.js";
 
 function renderSnapshotWeek(items) {
@@ -39,6 +40,13 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
   const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState("plan"); // "plan" | "view" — je Fenster/Tab unabhängig, bewusst nicht gespeichert
+  // Für welche Woche gerade geplant wird. Standard ist die laufende Woche;
+  // wer sonntags die kommende Woche plant, blättert einmal weiter.
+  const [weekStart, setWeekStart] = useState(() => toDateKey(startOfWeek(new Date())));
+
+  // Die Momentaufnahme gehört zu genau einer Woche — das Datum steht in jeder
+  // ihrer Zeilen. Ältere Einträge (vor Einführung der Spalte) haben keins.
+  const snapshotWeek = planSnapshot.length > 0 ? planSnapshot[0].week_start || null : null;
 
   const rows = useMemo(() => recipes.map((r) => {
     const p = planItems.find((pi) => pi.recipe_id === r.id);
@@ -148,7 +156,7 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
     // gerade erstellte Woche aus der Ansicht verschwindet.
     const snapshotRows = selectedRows.map(({ recipe, portions, weekday }) => ({
       id: newId(), user_id: userId, recipe_name: recipe.name, category: recipe.category,
-      weekday: weekday || null, portions,
+      weekday: weekday || null, portions, week_start: weekStart,
     }));
     const { error: delErr } = await write("plan_snapshot_items", "delete", null, { user_id: userId });
     if (delErr) showToast("Konnte alte Wochenansicht nicht löschen: " + delErr.message, "error");
@@ -186,9 +194,27 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
             <h3>Noch nichts geplant</h3>
             <p>Wechsle zu „Planen“, wähle Rezepte aus und erstelle die Einkaufsliste — die Woche erscheint danach hier.</p>
           </div>
-        ` : renderSnapshotWeek(planSnapshot)}
+        ` : html`
+          ${snapshotWeek && html`
+            <div class="week-heading">
+              <b>${relativeWeekLabel(snapshotWeek) || "Geplante Woche"}</b>
+              <span>${formatWeekRange(snapshotWeek)}</span>
+            </div>
+          `}
+          ${renderSnapshotWeek(planSnapshot)}
+        `}
       ` : html`
         <div class="card card-pad plan-summary">
+          <div class="week-picker">
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Woche zurück"
+              onClick=${() => setWeekStart(toDateKey(addWeeks(new Date(weekStart + "T00:00:00"), -1)))}>−</button>
+            <div class="week-picker-label">
+              <b>${relativeWeekLabel(weekStart) || "Woche"}</b>
+              <span>${formatWeekRange(weekStart)}</span>
+            </div>
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Woche vor"
+              onClick=${() => setWeekStart(toDateKey(addWeeks(new Date(weekStart + "T00:00:00"), 1)))}>+</button>
+          </div>
           <div class="plan-summary-head">
             <div class="plan-total">
               <b>${selectedRows.length}</b> Rezept${selectedRows.length === 1 ? "" : "e"} ausgewählt
