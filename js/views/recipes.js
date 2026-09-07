@@ -8,6 +8,7 @@ import { formatRelativeDate } from "../lib/format.js";
 import {
   IconSearch, IconPlus, IconX, IconEdit, IconTrash, IconClock, IconUsers,
   IconCamera, IconLeaf, IconSparkle, IconFlame, IconPlay, IconTimer, IconLink, IconHeart, IconCart,
+  IconArrowUp, IconArrowDown, IconPrint, IconShare,
 } from "../lib/icons.js";
 
 function round2(n) {
@@ -341,12 +342,37 @@ function RecipeCard({ recipe, onOpen, onToggleFavorite }) {
   `;
 }
 
+// Verschiebt einen Eintrag um eine Position; außerhalb der Liste passiert
+// nichts. Ohne das ließ sich ein vergessener Schritt nur durch Neutippen
+// an die richtige Stelle bringen.
+function moveItem(list, from, to) {
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function ReorderButtons({ index, count, onMove, label }) {
+  return html`
+    <div class="reorder">
+      <button type="button" onClick=${() => onMove(index, index - 1)} disabled=${index === 0}
+        aria-label=${`${label} nach oben`}><${IconArrowUp} strokeWidth="2.6" /></button>
+      <button type="button" onClick=${() => onMove(index, index + 1)} disabled=${index === count - 1}
+        aria-label=${`${label} nach unten`}><${IconArrowDown} strokeWidth="2.6" /></button>
+    </div>
+  `;
+}
+
 function StepEditor({ steps, onChange }) {
   function update(i, value) {
     onChange(steps.map((s, idx) => (idx === i ? value : s)));
   }
   function remove(i) {
     onChange(steps.filter((_, idx) => idx !== i));
+  }
+  function move(from, to) {
+    onChange(moveItem(steps, from, to));
   }
   function add() {
     onChange([...steps, ""]);
@@ -367,6 +393,7 @@ function StepEditor({ steps, onChange }) {
         <div class="step-edit-row" key=${i}>
           <span class="step-num">${i + 1}</span>
           <textarea class="textarea" rows="2" placeholder="Schritt beschreiben …" value=${s} onInput=${(e) => update(i, e.target.value)} onPaste=${(e) => handlePaste(i, e)}></textarea>
+          <${ReorderButtons} index=${i} count=${steps.length} onMove=${move} label="Schritt" />
           <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Schritt entfernen"><${IconX} strokeWidth="3" /></button>
         </div>
       `)}
@@ -386,6 +413,9 @@ function IngredientEditor({ ingredients, onChange }) {
   function add() {
     onChange([...ingredients, { name: "", amount: "", unit: "Stück" }]);
   }
+  function move(from, to) {
+    onChange(moveItem(ingredients, from, to));
+  }
   return html`
     <div>
       ${ingredients.map((row, i) => html`
@@ -395,6 +425,7 @@ function IngredientEditor({ ingredients, onChange }) {
           <select class="select" value=${row.unit} onChange=${(e) => update(i, { unit: e.target.value })}>
             ${UNITS.map((u) => html`<option value=${u}>${u}</option>`)}
           </select>
+          <${ReorderButtons} index=${i} count=${ingredients.length} onMove=${move} label="Zutat" />
           <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Zutat entfernen"><${IconX} strokeWidth="3" /></button>
         </div>
       `)}
@@ -658,7 +689,29 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   `;
 }
 
-function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, onToggleFavorite, onAddToShopping, lastCookedAt }) {
+// Rezept als schlichter Text — für "Teilen" (WhatsApp, Mail) und als
+// Rückfallebene zum Kopieren. Die App hat keine öffentlichen Rezept-Links,
+// also wird der Inhalt selbst weitergegeben, nicht eine Adresse.
+function recipeToText(recipe, portions, ratio) {
+  const lines = [recipe.name, ""];
+  lines.push(`Für ${portions} Portion${portions === 1 ? "" : "en"}`);
+  const total = (Number(recipe.prep_time) || 0) + (Number(recipe.cook_time) || 0);
+  if (total > 0) lines.push(`Zeit: ${total} Min.`);
+  const ings = recipe.ingredients || [];
+  if (ings.length > 0) {
+    lines.push("", "Zutaten");
+    for (const i of ings) lines.push(`- ${round2((Number(i.amount) || 0) * ratio)} ${i.unit} ${i.name}`);
+  }
+  const steps = recipe.steps || [];
+  if (steps.length > 0) {
+    lines.push("", "Zubereitung");
+    steps.forEach((s, idx) => lines.push(`${idx + 1}. ${s}`));
+  }
+  if (recipe.notes) lines.push("", "Notizen", recipe.notes);
+  return lines.join("\n");
+}
+
+function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, onToggleFavorite, onAddToShopping, onShare, lastCookedAt }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [portions, setPortions] = useState(recipe.portions);
   const [cookModeOpen, setCookModeOpen] = useState(false);
@@ -701,6 +754,10 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, onToggl
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               ${lastCookedAt && html`<span class="hint">Zuletzt gekocht: ${formatRelativeDate(lastCookedAt)}</span>`}
               <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onAddToShopping(recipe, ratio)}><${IconCart} strokeWidth="2.2" /> Auf die Einkaufsliste</button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-sm" onClick=${() => onShare(recipe, portions, ratio)}
+                title="Rezept teilen" aria-label="Rezept teilen"><${IconShare} strokeWidth="2.2" /></button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-sm" onClick=${() => window.print()}
+                title="Rezept drucken" aria-label="Rezept drucken"><${IconPrint} strokeWidth="2.2" /></button>
               <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onMarkCooked(recipe)}><${IconFlame} strokeWidth="2.2" /> Heute gekocht</button>
               ${(recipe.steps || []).length > 0 && html`<button type="button" class="btn btn-accent btn-sm" onClick=${() => setCookModeOpen(true)}><${IconPlay} strokeWidth="2.2" /> Kochmodus</button>`}
             </div>
@@ -848,6 +905,26 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
       : `${lines.length} Zutaten auf die Einkaufsliste gelegt.`, "success");
   }
 
+  // Auf dem Handy öffnet das die native Teilen-Auswahl, am Rechner gibt es
+  // die meist nicht — dort landet der Text in der Zwischenablage.
+  async function shareRecipe(recipe, portions, ratio) {
+    const text = recipeToText(recipe, portions, ratio);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: recipe.name, text });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // vom Nutzer abgebrochen
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Rezept in die Zwischenablage kopiert.", "success");
+    } catch {
+      showToast("Teilen wird von diesem Browser nicht unterstützt.", "error");
+    }
+  }
+
   async function toggleFavorite(recipe) {
     const is_favorite = !recipe.is_favorite;
     onUpdate({ ...recipe, is_favorite });
@@ -922,6 +999,7 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
           onMarkCooked=${markCooked}
           onToggleFavorite=${toggleFavorite}
           onAddToShopping=${addToShopping}
+          onShare=${shareRecipe}
           lastCookedAt=${lastCookedByRecipe.get(openDetail.id)}
         />
       `}

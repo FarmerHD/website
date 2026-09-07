@@ -13,6 +13,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Rezepte" />
+<script>
+// Muss vor dem Stylesheet und vor dem ersten Zeichnen laufen, sonst blitzt
+// beim Start kurz das helle Design auf. Löst "system" gleich hier auf, damit
+// das CSS nur noch data-theme kennen muss.
+(function () {
+  try {
+    var pref = localStorage.getItem("mr_theme") || "system";
+    var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  } catch (e) {
+    document.documentElement.setAttribute("data-theme", "light");
+  }
+})();
+</script>
 <link rel="stylesheet" href="css/styles.css" />
 <script src="js/vendor/supabase.min.js"></script>
 </head>
