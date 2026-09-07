@@ -2,15 +2,74 @@ import { html, useState, useEffect, useMemo, useRef } from "../lib/preact.js";
 import { supabaseClient as sb } from "../config.js";
 import { write, newId } from "../lib/offline.js";
 import { CATEGORIES, CATEGORY_STYLE, UNITS } from "../lib/constants.js";
+import { canMerge, mergedAmountUnit } from "../lib/categorize.js";
 import { parseRecipeText, splitStepsText } from "../lib/parser.js";
 import { formatRelativeDate } from "../lib/format.js";
 import {
   IconSearch, IconPlus, IconX, IconEdit, IconTrash, IconClock, IconUsers,
-  IconCamera, IconLeaf, IconSparkle, IconFlame, IconPlay, IconTimer, IconLink,
+  IconCamera, IconLeaf, IconSparkle, IconFlame, IconPlay, IconTimer, IconLink, IconHeart, IconCart,
+  IconArrowUp, IconArrowDown, IconPrint, IconShare,
 } from "../lib/icons.js";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
+}
+
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])';
+
+// Offene Dialoge in Öffnungsreihenfolge. Aus der Detailansicht heraus lässt
+// sich der Kochmodus öffnen; ohne diesen Stapel würde Escape dann beide auf
+// einmal schließen, statt nur den obersten.
+const modalStack = [];
+
+// Gemeinsames Verhalten aller Overlays: Escape schließt, die Seite dahinter
+// scrollt nicht mit, der Fokus startet im Dialog und bleibt beim Tabben
+// darin. Gibt die Referenz zurück, die an das Dialog-Element gehört.
+function useModal(onClose) {
+  const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const token = {};
+    modalStack.push(token);
+
+    function onKey(e) {
+      if (modalStack[modalStack.length - 1] !== token) return;
+      if (e.key === "Escape") {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !ref.current) return;
+      const items = [...ref.current.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const previouslyFocused = document.activeElement;
+    if (ref.current) ref.current.focus();
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      document.body.style.overflow = prevOverflow;
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+    };
+  }, []);
+
+  return ref;
 }
 
 // Baut das Lesezeichen-Tool ("Bookmarklet"), mit dem sich Rezepte von
@@ -54,6 +113,35 @@ function buildImportBookmarklet() {
   return "javascript:" + encodeURIComponent(code);
 }
 
+const PHOTO_MAX_EDGE = 1600;
+const PHOTO_QUALITY = 0.82;
+
+// Handyfotos sind schnell 3–8 MB groß. Unverkleinert hochgeladen dauert das
+// über Mobilfunk spürbar und füllt den Speicherplatz unnötig — für ein
+// Rezeptbild reichen 1600 px lange Kante. Schlägt das Umwandeln fehl (altes
+// Gerät, exotisches Format), wird die Originaldatei hochgeladen.
+async function shrinkImage(file) {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 600 * 1024) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", PHOTO_QUALITY));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 // Sucht in einem Zubereitungsschritt nach einer Zeitangabe ("10 Minuten",
 // "1 Std.", "1 Stunde 30 Min.") für den Pro-Schritt-Timer im Kochmodus.
 function extractStepMinutes(text) {
@@ -82,22 +170,43 @@ function beep() {
   }
 }
 
+// Der Timer rechnet gegen einen festen Ziel-Zeitpunkt statt sekundenweise
+// herunterzuzählen: Browser drosseln Timer in Hintergrund-Tabs stark (oft
+// auf einmal pro Minute), und genau das passiert beim Kochen ständig —
+// eine Zähl-Schleife würde dann deutlich nachgehen. So stimmt die
+// Restzeit auch nach einem Ausflug in eine andere App.
 function StepTimer({ minutes }) {
   const total = minutes * 60;
   const [remaining, setRemaining] = useState(total);
   const [running, setRunning] = useState(false);
+  const deadlineRef = useRef(null);
 
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) {
-      setRunning(false);
-      beep();
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      return;
+    function tick() {
+      const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
+      setRemaining(left);
+      if (left === 0) {
+        setRunning(false);
+        beep();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      }
     }
-    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(t);
-  }, [running, remaining]);
+    tick();
+    const iv = setInterval(tick, 500);
+    // Beim Zurückkehren in die App sofort neu rechnen, statt bis zum
+    // nächsten Intervall eine veraltete Zeit anzuzeigen.
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [running]);
+
+  function start() {
+    deadlineRef.current = Date.now() + remaining * 1000;
+    setRunning(true);
+  }
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
@@ -110,7 +219,7 @@ function StepTimer({ minutes }) {
       ${finished
         ? html`<span>Fertig!</span>`
         : html`
-          <button type="button" class="btn-link" onClick=${() => setRunning((r) => !r)}>${running ? "Pause" : remaining === total ? "Start" : "Weiter"}</button>
+          <button type="button" class="btn-link" onClick=${() => (running ? setRunning(false) : start())}>${running ? "Pause" : remaining === total ? "Start" : "Weiter"}</button>
           ${remaining !== total && html`<button type="button" class="btn-link" onClick=${() => { setRunning(false); setRemaining(total); }}>Reset</button>`}
         `}
     </div>
@@ -121,6 +230,7 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   const steps = recipe.steps || [];
   const [checked, setChecked] = useState(() => steps.map(() => false));
   const wakeLockRef = useRef(null);
+  const dialogRef = useModal(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,7 +263,7 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   const doneCount = checked.filter(Boolean).length;
 
   return html`
-    <div class="cookmode-overlay">
+    <div class="cookmode-overlay" role="dialog" aria-modal="true" aria-label=${`Kochmodus: ${recipe.name}`} tabindex="-1" ref=${dialogRef}>
       <div class="cookmode-header">
         <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Kochmodus verlassen"><${IconX} /></button>
         <span class="cookmode-title">${recipe.name}</span>
@@ -178,8 +288,10 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
               <input type="checkbox" class="check" checked=${checked[i]} onChange=${() => toggle(i)} />
               <div class="cookmode-step-body">
                 <span class="step-num">${i + 1}</span>
-                <p>${s}</p>
-                ${mins && html`<${StepTimer} minutes=${mins} />`}
+                <div>
+                  <p>${s}</p>
+                  ${mins && html`<${StepTimer} minutes=${mins} />`}
+                </div>
               </div>
             </label>
           `;
@@ -192,10 +304,26 @@ function CookMode({ recipe, ratio, onClose, onMarkCooked }) {
   `;
 }
 
-function RecipeCard({ recipe, onOpen }) {
+// Gesucht wird über Name, Zutaten und Notizen — "was kann ich mit Zucchini
+// kochen?" ist die häufigste Frage an eine Rezeptsammlung, und die
+// beantwortet ein reiner Namensvergleich nicht.
+function matchesQuery(recipe, q) {
+  if ((recipe.name || "").toLowerCase().includes(q)) return true;
+  if ((recipe.ingredients || []).some((i) => (i.name || "").toLowerCase().includes(q))) return true;
+  return (recipe.notes || "").toLowerCase().includes(q);
+}
+
+function RecipeCard({ recipe, onOpen, onToggleFavorite }) {
   return html`
+    <div class="recipe-card-wrap">
+    <button
+      class="fav-btn ${recipe.is_favorite ? "on" : ""}"
+      onClick=${() => onToggleFavorite(recipe)}
+      aria-pressed=${recipe.is_favorite ? "true" : "false"}
+      aria-label=${recipe.is_favorite ? `„${recipe.name}“ aus den Favoriten entfernen` : `„${recipe.name}“ zu den Favoriten`}
+    ><${IconHeart} strokeWidth="2.2" /></button>
     <button class="recipe-card" onClick=${() => onOpen(recipe)}>
-      <div class="recipe-thumb">
+      <div class="recipe-thumb ${recipe.image_url ? "" : "empty"}">
         ${recipe.image_url
           ? html`<img src=${recipe.image_url} alt="" loading="lazy" />`
           : html`<${IconLeaf} />`}
@@ -210,6 +338,29 @@ function RecipeCard({ recipe, onOpen }) {
         </div>
       </div>
     </button>
+    </div>
+  `;
+}
+
+// Verschiebt einen Eintrag um eine Position; außerhalb der Liste passiert
+// nichts. Ohne das ließ sich ein vergessener Schritt nur durch Neutippen
+// an die richtige Stelle bringen.
+function moveItem(list, from, to) {
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function ReorderButtons({ index, count, onMove, label }) {
+  return html`
+    <div class="reorder">
+      <button type="button" onClick=${() => onMove(index, index - 1)} disabled=${index === 0}
+        aria-label=${`${label} nach oben`}><${IconArrowUp} strokeWidth="2.6" /></button>
+      <button type="button" onClick=${() => onMove(index, index + 1)} disabled=${index === count - 1}
+        aria-label=${`${label} nach unten`}><${IconArrowDown} strokeWidth="2.6" /></button>
+    </div>
   `;
 }
 
@@ -219,6 +370,9 @@ function StepEditor({ steps, onChange }) {
   }
   function remove(i) {
     onChange(steps.filter((_, idx) => idx !== i));
+  }
+  function move(from, to) {
+    onChange(moveItem(steps, from, to));
   }
   function add() {
     onChange([...steps, ""]);
@@ -239,6 +393,7 @@ function StepEditor({ steps, onChange }) {
         <div class="step-edit-row" key=${i}>
           <span class="step-num">${i + 1}</span>
           <textarea class="textarea" rows="2" placeholder="Schritt beschreiben …" value=${s} onInput=${(e) => update(i, e.target.value)} onPaste=${(e) => handlePaste(i, e)}></textarea>
+          <${ReorderButtons} index=${i} count=${steps.length} onMove=${move} label="Schritt" />
           <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Schritt entfernen"><${IconX} strokeWidth="3" /></button>
         </div>
       `)}
@@ -258,6 +413,9 @@ function IngredientEditor({ ingredients, onChange }) {
   function add() {
     onChange([...ingredients, { name: "", amount: "", unit: "Stück" }]);
   }
+  function move(from, to) {
+    onChange(moveItem(ingredients, from, to));
+  }
   return html`
     <div>
       ${ingredients.map((row, i) => html`
@@ -267,6 +425,7 @@ function IngredientEditor({ ingredients, onChange }) {
           <select class="select" value=${row.unit} onChange=${(e) => update(i, { unit: e.target.value })}>
             ${UNITS.map((u) => html`<option value=${u}>${u}</option>`)}
           </select>
+          <${ReorderButtons} index=${i} count=${ingredients.length} onMove=${move} label="Zutat" />
           <button type="button" class="ing-row-remove" onClick=${() => remove(i)} aria-label="Zutat entfernen"><${IconX} strokeWidth="3" /></button>
         </div>
       `)}
@@ -321,8 +480,24 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   const [importOpen, setImportOpen] = useState(false);
   const [importHint, setImportHint] = useState(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef(null);
   const bookmarkletHref = useMemo(() => buildImportBookmarklet(), []);
+
+  // Schutz vor versehentlichem Verwerfen: Ein Klick neben das Formular hat
+  // vorher wortlos alle Eingaben weggeworfen. Verglichen wird gegen den
+  // Anfangszustand, damit reines Öffnen und Schließen nicht nachfragt.
+  // Die Datei selbst lässt sich nicht serialisieren — ihr Name genügt zur
+  // Erkennung, weil er sich beim Auswählen eines Fotos mitändert.
+  const snapshot = (f, text) => JSON.stringify({ ...f, imageFile: f.imageFile ? f.imageFile.name : null, importText: text });
+  const initialSnapshot = useRef(null);
+  if (initialSnapshot.current === null) initialSnapshot.current = snapshot(form, "");
+
+  function requestClose() {
+    const dirty = snapshot(form, importText) !== initialSnapshot.current;
+    if (dirty && !window.confirm("Änderungen verwerfen? Deine Eingaben gehen verloren.")) return;
+    onClose();
+  }
+
+  const dialogRef = useModal(requestClose);
 
   function runImport() {
     if (!importText.trim()) return;
@@ -349,8 +524,9 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
       if (!navigator.onLine) {
         showToast("Kein Foto-Upload ohne Verbindung — Rezept wird ohne neues Foto gespeichert.", "error");
       } else {
-        const path = `${crypto.randomUUID()}-${form.imageFile.name}`.replace(/\s+/g, "_");
-        const { error: upErr } = await sb.storage.from("recipe-photos").upload(path, form.imageFile, { upsert: true });
+        const file = await shrinkImage(form.imageFile);
+        const path = `${crypto.randomUUID()}-${file.name}`.replace(/\s+/g, "_");
+        const { error: upErr } = await sb.storage.from("recipe-photos").upload(path, file, { upsert: true });
         if (upErr) {
           showToast("Foto-Upload fehlgeschlagen: " + upErr.message, "error");
         } else {
@@ -392,10 +568,10 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   }
 
   return html`
-    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
-      <div class="sheet wide">
+    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && requestClose()}>
+      <div class="sheet wide" role="dialog" aria-modal="true" aria-label=${isEdit ? "Rezept bearbeiten" : "Neues Rezept"} tabindex="-1" ref=${dialogRef}>
         <div class="sheet-header">
-          <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Schließen"><${IconX} /></button>
+          <button class="btn btn-icon btn-ghost" onClick=${requestClose} aria-label="Schließen"><${IconX} /></button>
           <h2>${isEdit ? "Rezept bearbeiten" : "Neues Rezept"}</h2>
         </div>
         <form onSubmit=${submit}>
@@ -429,7 +605,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
                   <span class="btn btn-secondary btn-sm">Foto auswählen</span>
                   <p class="hint" style="margin-top:6px">Upload benötigt eine Internetverbindung.</p>
                 </div>
-                <input ref=${fileRef} type="file" accept="image/*" style="display:none" onChange=${onPickFile} />
+                <input type="file" accept="image/*" style="display:none" onChange=${onPickFile} />
               </label>
             </div>
 
@@ -504,7 +680,7 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
             </div>
           </div>
           <div class="sheet-foot">
-            <button type="button" class="btn btn-secondary" onClick=${onClose}>Abbrechen</button>
+            <button type="button" class="btn btn-secondary" onClick=${requestClose}>Abbrechen</button>
             <button type="submit" class="btn btn-primary" disabled=${saving}>${saving ? "Speichert …" : "Rezept speichern"}</button>
           </div>
         </form>
@@ -513,10 +689,33 @@ function RecipeForm({ recipe, initialImportData, onClose, onSaved, showToast, us
   `;
 }
 
-function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCookedAt }) {
+// Rezept als schlichter Text — für "Teilen" (WhatsApp, Mail) und als
+// Rückfallebene zum Kopieren. Die App hat keine öffentlichen Rezept-Links,
+// also wird der Inhalt selbst weitergegeben, nicht eine Adresse.
+function recipeToText(recipe, portions, ratio) {
+  const lines = [recipe.name, ""];
+  lines.push(`Für ${portions} Portion${portions === 1 ? "" : "en"}`);
+  const total = (Number(recipe.prep_time) || 0) + (Number(recipe.cook_time) || 0);
+  if (total > 0) lines.push(`Zeit: ${total} Min.`);
+  const ings = recipe.ingredients || [];
+  if (ings.length > 0) {
+    lines.push("", "Zutaten");
+    for (const i of ings) lines.push(`- ${round2((Number(i.amount) || 0) * ratio)} ${i.unit} ${i.name}`);
+  }
+  const steps = recipe.steps || [];
+  if (steps.length > 0) {
+    lines.push("", "Zubereitung");
+    steps.forEach((s, idx) => lines.push(`${idx + 1}. ${s}`));
+  }
+  if (recipe.notes) lines.push("", "Notizen", recipe.notes);
+  return lines.join("\n");
+}
+
+function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, onToggleFavorite, onAddToShopping, onShare, lastCookedAt }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [portions, setPortions] = useState(recipe.portions);
   const [cookModeOpen, setCookModeOpen] = useState(false);
+  const dialogRef = useModal(onClose);
   const totalTime = (Number(recipe.prep_time) || 0) + (Number(recipe.cook_time) || 0);
   const ratio = portions / (Number(recipe.portions) || 1);
   if (cookModeOpen) {
@@ -524,10 +723,16 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
   }
   return html`
     <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
-      <div class="sheet wide">
+      <div class="sheet wide" role="dialog" aria-modal="true" aria-label=${recipe.name} tabindex="-1" ref=${dialogRef}>
         <div class="sheet-header">
           <button class="btn btn-icon btn-ghost" onClick=${onClose} aria-label="Schließen"><${IconX} /></button>
           <h2 style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${recipe.name}</h2>
+          <button
+            class="btn btn-icon btn-ghost fav-icon ${recipe.is_favorite ? "on" : ""}"
+            onClick=${() => onToggleFavorite(recipe)}
+            aria-pressed=${recipe.is_favorite ? "true" : "false"}
+            aria-label=${recipe.is_favorite ? "Aus den Favoriten entfernen" : "Zu den Favoriten"}
+          ><${IconHeart} /></button>
           <button class="btn btn-icon btn-ghost" onClick=${() => onEdit(recipe)} aria-label="Bearbeiten"><${IconEdit} /></button>
           <button class="btn btn-icon btn-ghost" onClick=${() => setConfirmDelete(true)} aria-label="Löschen"><${IconTrash} /></button>
         </div>
@@ -541,13 +746,18 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
               </span>
             </div>
           `}
-          <div class="recipe-detail-photo">
+          <div class="recipe-detail-photo ${recipe.image_url ? "" : "empty"}">
             ${recipe.image_url ? html`<img src=${recipe.image_url} />` : html`<${IconLeaf} />`}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
             <div class="badge" style="background:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"}-soft);color:var(--${CATEGORY_STYLE[recipe.category] || "tag-7"})">${recipe.category}</div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               ${lastCookedAt && html`<span class="hint">Zuletzt gekocht: ${formatRelativeDate(lastCookedAt)}</span>`}
+              <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onAddToShopping(recipe, ratio)}><${IconCart} strokeWidth="2.2" /> Auf die Einkaufsliste</button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-sm" onClick=${() => onShare(recipe, portions, ratio)}
+                title="Rezept teilen" aria-label="Rezept teilen"><${IconShare} strokeWidth="2.2" /></button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-sm" onClick=${() => window.print()}
+                title="Rezept drucken" aria-label="Rezept drucken"><${IconPrint} strokeWidth="2.2" /></button>
               <button type="button" class="btn btn-secondary btn-sm" onClick=${() => onMarkCooked(recipe)}><${IconFlame} strokeWidth="2.2" /> Heute gekocht</button>
               ${(recipe.steps || []).length > 0 && html`<button type="button" class="btn btn-accent btn-sm" onClick=${() => setCookModeOpen(true)}><${IconPlay} strokeWidth="2.2" /> Kochmodus</button>`}
             </div>
@@ -597,9 +807,10 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete, onMarkCooked, lastCoo
   `;
 }
 
-export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, onCookLogChange, urlImportRecipe, onUrlImportConsumed, showToast, userId }) {
+export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, onCookLogChange, shoppingItems, onShoppingChange, urlImportRecipe, onUrlImportConsumed, showToast, userId }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Alle");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [openForm, setOpenForm] = useState(null); // null | 'new' | recipe
   const [openDetail, setOpenDetail] = useState(null);
 
@@ -612,9 +823,10 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
     const q = search.trim().toLowerCase();
     return recipes.filter((r) =>
       (category === "Alle" || r.category === category) &&
-      (q === "" || r.name.toLowerCase().includes(q))
+      (!favoritesOnly || r.is_favorite) &&
+      (q === "" || matchesQuery(r, q))
     );
-  }, [recipes, search, category]);
+  }, [recipes, search, category, favoritesOnly]);
 
   const lastCookedByRecipe = useMemo(() => {
     const map = new Map();
@@ -646,6 +858,84 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
     else showToast(queued ? "Gelöscht — wird synchronisiert." : "Rezept gelöscht.", "success");
   }
 
+  // Zutaten direkt aufs Einkaufszettel legen, ohne den Umweg über den
+  // Wochenplan. Gleichnamiges wird wie dort zusammengeführt, damit nicht
+  // zwei Zeilen "Mehl" nebeneinander stehen.
+  async function addToShopping(recipe, ratio) {
+    const lines = (recipe.ingredients || [])
+      .filter((i) => (i.name || "").trim())
+      .map((i) => ({ name: i.name.trim(), amount: round2((Number(i.amount) || 0) * ratio), unit: i.unit }));
+    if (lines.length === 0) {
+      showToast("Dieses Rezept hat keine Zutaten hinterlegt.", "error");
+      return;
+    }
+
+    let next = [...shoppingItems];
+    const writes = [];
+    let merged = 0;
+    for (const line of lines) {
+      const existing = next.find((it) => canMerge(it, line));
+      if (existing) {
+        const { amount, unit } = mergedAmountUnit(existing, line);
+        const from_recipes = existing.from_recipes && existing.from_recipes.includes(recipe.name)
+          ? existing.from_recipes
+          : [...(existing.from_recipes || []), recipe.name];
+        next = next.map((it) => (it.id === existing.id ? { ...it, amount, unit, from_recipes } : it));
+        writes.push(["update", { amount, unit, from_recipes }, { id: existing.id }]);
+        merged++;
+      } else {
+        const item = { id: newId(), user_id: userId, name: line.name, amount: line.amount, unit: line.unit, checked: false, from_recipes: [recipe.name] };
+        next = [...next, item];
+        writes.push(["insert", item, null]);
+      }
+    }
+    onShoppingChange(next);
+
+    let failed = 0;
+    for (const [op, payload, match] of writes) {
+      const { error } = await write("shopping_items", op, payload, match);
+      if (error) failed++;
+    }
+    if (failed > 0) {
+      showToast(`${failed} von ${writes.length} Artikeln konnten nicht gespeichert werden.`, "error");
+      return;
+    }
+    showToast(merged > 0
+      ? `${lines.length} Zutaten übernommen (${merged} zusammengeführt).`
+      : `${lines.length} Zutaten auf die Einkaufsliste gelegt.`, "success");
+  }
+
+  // Auf dem Handy öffnet das die native Teilen-Auswahl, am Rechner gibt es
+  // die meist nicht — dort landet der Text in der Zwischenablage.
+  async function shareRecipe(recipe, portions, ratio) {
+    const text = recipeToText(recipe, portions, ratio);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: recipe.name, text });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // vom Nutzer abgebrochen
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Rezept in die Zwischenablage kopiert.", "success");
+    } catch {
+      showToast("Teilen wird von diesem Browser nicht unterstützt.", "error");
+    }
+  }
+
+  async function toggleFavorite(recipe) {
+    const is_favorite = !recipe.is_favorite;
+    onUpdate({ ...recipe, is_favorite });
+    if (openDetail && openDetail.id === recipe.id) setOpenDetail({ ...openDetail, is_favorite });
+    const { error } = await write("recipes", "update", { is_favorite }, { id: recipe.id });
+    if (error) {
+      onUpdate({ ...recipe, is_favorite: !is_favorite });
+      showToast("Konnte Favorit nicht speichern: " + error.message, "error");
+    }
+  }
+
   async function markCooked(recipe) {
     const entry = { id: newId(), user_id: userId, recipe_id: recipe.id, recipe_name: recipe.name, cooked_at: new Date().toISOString() };
     onCookLogChange([entry, ...cookLog]);
@@ -665,11 +955,14 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
       <div class="filter-bar">
         <div class="search-input">
           <${IconSearch} strokeWidth="2.2" />
-          <input class="input" placeholder="Rezepte durchsuchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
+          <input class="input" placeholder="Rezept, Zutat oder Notiz suchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
         </div>
       </div>
       <div class="category-scroll" style="margin-bottom:18px">
         <button class="cat-pill ${category === "Alle" ? "active" : ""}" onClick=${() => setCategory("Alle")}>Alle</button>
+        <button class="cat-pill fav-pill ${favoritesOnly ? "active" : ""}" onClick=${() => setFavoritesOnly((v) => !v)} aria-pressed=${favoritesOnly ? "true" : "false"}>
+          <${IconHeart} strokeWidth="2.4" /> Favoriten
+        </button>
         ${CATEGORIES.map((c) => html`<button class="cat-pill ${category === c ? "active" : ""}" onClick=${() => setCategory(c)}>${c}</button>`)}
       </div>
 
@@ -681,7 +974,7 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
         </div>
       ` : html`
         <div class="recipe-grid">
-          ${filtered.map((r) => html`<${RecipeCard} key=${r.id} recipe=${r} onOpen=${setOpenDetail} />`)}
+          ${filtered.map((r) => html`<${RecipeCard} key=${r.id} recipe=${r} onOpen=${setOpenDetail} onToggleFavorite=${toggleFavorite} />`)}
         </div>
       `}
 
@@ -704,6 +997,9 @@ export function RecipesView({ recipes, onCreate, onUpdate, onDelete, cookLog, on
           onEdit=${(r) => setOpenForm(r)}
           onDelete=${handleDelete}
           onMarkCooked=${markCooked}
+          onToggleFavorite=${toggleFavorite}
+          onAddToShopping=${addToShopping}
+          onShare=${shareRecipe}
           lastCookedAt=${lastCookedByRecipe.get(openDetail.id)}
         />
       `}

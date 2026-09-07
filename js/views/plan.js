@@ -2,7 +2,8 @@ import { html, useMemo, useState } from "../lib/preact.js";
 import { write, newId } from "../lib/offline.js";
 import { mergeLines, canMerge } from "../lib/categorize.js";
 import { CATEGORY_STYLE, WEEKDAYS } from "../lib/constants.js";
-import { IconCart, IconCalendar } from "../lib/icons.js";
+import { startOfWeek, toDateKey, addWeeks, formatWeekRange, relativeWeekLabel } from "../lib/format.js";
+import { IconCart, IconCalendar, IconSearch } from "../lib/icons.js";
 
 function renderSnapshotWeek(items) {
   const byDay = new Map(WEEKDAYS.map((d) => [d, []]));
@@ -37,12 +38,31 @@ function renderSnapshotWeek(items) {
 
 export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onShoppingChange, planSnapshot, onPlanSnapshotChange, showToast, userId }) {
   const [generating, setGenerating] = useState(false);
+  const [search, setSearch] = useState("");
   const [mode, setMode] = useState("plan"); // "plan" | "view" — je Fenster/Tab unabhängig, bewusst nicht gespeichert
+  // Für welche Woche gerade geplant wird. Standard ist die laufende Woche;
+  // wer sonntags die kommende Woche plant, blättert einmal weiter.
+  const [weekStart, setWeekStart] = useState(() => toDateKey(startOfWeek(new Date())));
+
+  // Die Momentaufnahme gehört zu genau einer Woche — das Datum steht in jeder
+  // ihrer Zeilen. Ältere Einträge (vor Einführung der Spalte) haben keins.
+  const snapshotWeek = planSnapshot.length > 0 ? planSnapshot[0].week_start || null : null;
 
   const rows = useMemo(() => recipes.map((r) => {
     const p = planItems.find((pi) => pi.recipe_id === r.id);
     return { recipe: r, selected: p ? p.selected : false, portions: p ? p.portions : r.portions, weekday: p ? p.weekday || "" : "" };
   }), [recipes, planItems]);
+
+  // Ausgewählte immer oben: Sonst rutschen sie beim Scrollen durch eine
+  // längere Rezeptliste aus dem Blick, obwohl man sie gerade zusammenstellt.
+  // Die Suche daneben macht die Liste ab ein paar Dutzend Rezepten erst
+  // benutzbar.
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows
+      .filter((r) => r.selected || q === "" || r.recipe.name.toLowerCase().includes(q))
+      .sort((a, b) => (a.selected === b.selected ? 0 : a.selected ? -1 : 1));
+  }, [rows, search]);
 
   const selectedRows = [...rows.filter((r) => r.selected)].sort((a, b) => {
     const ia = a.weekday ? WEEKDAYS.indexOf(a.weekday) : 99;
@@ -136,7 +156,7 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
     // gerade erstellte Woche aus der Ansicht verschwindet.
     const snapshotRows = selectedRows.map(({ recipe, portions, weekday }) => ({
       id: newId(), user_id: userId, recipe_name: recipe.name, category: recipe.category,
-      weekday: weekday || null, portions,
+      weekday: weekday || null, portions, week_start: weekStart,
     }));
     const { error: delErr } = await write("plan_snapshot_items", "delete", null, { user_id: userId });
     if (delErr) showToast("Konnte alte Wochenansicht nicht löschen: " + delErr.message, "error");
@@ -174,9 +194,27 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
             <h3>Noch nichts geplant</h3>
             <p>Wechsle zu „Planen“, wähle Rezepte aus und erstelle die Einkaufsliste — die Woche erscheint danach hier.</p>
           </div>
-        ` : renderSnapshotWeek(planSnapshot)}
+        ` : html`
+          ${snapshotWeek && html`
+            <div class="week-heading">
+              <b>${relativeWeekLabel(snapshotWeek) || "Geplante Woche"}</b>
+              <span>${formatWeekRange(snapshotWeek)}</span>
+            </div>
+          `}
+          ${renderSnapshotWeek(planSnapshot)}
+        `}
       ` : html`
         <div class="card card-pad plan-summary">
+          <div class="week-picker">
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Woche zurück"
+              onClick=${() => setWeekStart(toDateKey(addWeeks(new Date(weekStart + "T00:00:00"), -1)))}>−</button>
+            <div class="week-picker-label">
+              <b>${relativeWeekLabel(weekStart) || "Woche"}</b>
+              <span>${formatWeekRange(weekStart)}</span>
+            </div>
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Woche vor"
+              onClick=${() => setWeekStart(toDateKey(addWeeks(new Date(weekStart + "T00:00:00"), 1)))}>+</button>
+          </div>
           <div class="plan-summary-head">
             <div class="plan-total">
               <b>${selectedRows.length}</b> Rezept${selectedRows.length === 1 ? "" : "e"} ausgewählt
@@ -195,8 +233,15 @@ export function PlanView({ recipes, planItems, onPlanChange, shoppingItems, onSh
             <p>Lege zuerst ein paar Rezepte an, dann kannst du hier deine Woche zusammenstellen.</p>
           </div>
         ` : html`
+          <div class="filter-bar">
+            <div class="search-input">
+              <${IconSearch} strokeWidth="2.2" />
+              <input class="input" placeholder="Rezepte durchsuchen …" value=${search} onInput=${(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          ${visibleRows.length === 0 && html`<p class="hint" style="margin-bottom:18px">Kein Rezept gefunden.</p>`}
           <div class="plan-list">
-            ${rows.map(({ recipe, selected, portions, weekday }) => html`
+            ${visibleRows.map(({ recipe, selected, portions, weekday }) => html`
               <div class="plan-row ${selected ? "selected" : ""}" key=${recipe.id}>
                 <label class="checkbox-row" style="flex:0">
                   <input type="checkbox" class="check" checked=${selected} onChange=${() => toggle(recipe)} />

@@ -3,7 +3,10 @@
 // werden bewusst NICHT hier gecacht — das übernimmt js/lib/offline.js
 // per localStorage, inkl. Warteschlange für Änderungen.
 
-const CACHE_VERSION = "mr-v1";
+// WICHTIG: Bei jedem Release hochzählen. Der Name ist der Cache-Schlüssel —
+// bleibt er gleich, behalten bereits installierte Geräte ihre alten Dateien,
+// und Korrekturen kommen bei den Nutzern nicht an.
+const CACHE_VERSION = "mr-v2";
 const APP_SHELL = [
   "./",
   "index.html",

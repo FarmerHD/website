@@ -8,7 +8,7 @@ import { PlanView } from "./views/plan.js";
 import { ShoppingView } from "./views/shopping.js";
 import { PantryView } from "./views/pantry.js";
 import { StatsView } from "./views/stats.js";
-import { IconBook, IconCalendar, IconCart, IconBox, IconChartBar, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX } from "./lib/icons.js";
+import { IconBook, IconCalendar, IconCart, IconBox, IconChartBar, IconLeaf, IconLogOut, IconWifiOff, IconCloud, IconCheck, IconX, IconSun, IconMoon } from "./lib/icons.js";
 
 initSync(sb);
 
@@ -31,6 +31,43 @@ function SyncPill({ status }) {
   if (!status.online) return html`<span class="sync-pill offline"><span class="dot"></span><${IconWifiOff} strokeWidth="2.2" style="width:14px;height:14px" /> Offline</span>`;
   if (status.syncing) return html`<span class="sync-pill syncing"><span class="dot"></span>Wird synchronisiert …</span>`;
   return html`<span class="sync-pill"><span class="dot"></span>${status.pending} in Warteschlange</span>`;
+}
+
+// Gespeichert wird die Absicht ("system"/"light"/"dark"), angewandt wird die
+// daraus aufgelöste Farbwelt. Bei "system" zieht die App mit, wenn das
+// Betriebssystem umschaltet, ohne dass die Seite neu geladen werden muss.
+const THEME_KEY = "mr_theme";
+
+function useTheme() {
+  const [pref, setPref] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) || "system";
+    } catch {
+      return "system";
+    }
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark = pref === "dark" || (pref === "system" && mq.matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", dark ? "#17150F" : "#FBF7F1");
+    };
+    apply();
+    try {
+      localStorage.setItem(THEME_KEY, pref);
+    } catch {
+      // Privater Modus o.ä. — die Auswahl gilt dann nur für diese Sitzung.
+    }
+    if (pref !== "system") return;
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [pref]);
+
+  const isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
+  return [pref, () => setPref(isDark() ? "light" : "dark")];
 }
 
 function useToasts() {
@@ -56,6 +93,28 @@ function App() {
   const [toasts, showToast] = useToasts();
   const [legalOpen, setLegalOpen] = useState(false);
   const [urlImportRecipe, setUrlImportRecipe] = useState(null);
+  const [updateReady, setUpdateReady] = useState(false);
+  const [themePref, toggleTheme] = useTheme();
+  const darkActive = themePref === "dark" || (themePref === "system" && typeof window !== "undefined"
+    && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  // Service Worker registrieren und melden, wenn eine neuere Version
+  // bereitliegt. Ohne diesen Hinweis würden Nutzer eine ausgelieferte
+  // Korrektur erst beim übernächsten Öffnen sehen, ohne zu wissen, warum.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const fresh = reg.installing;
+        if (!fresh) return;
+        fresh.addEventListener("statechange", () => {
+          // controller vorhanden = es lief schon eine ältere Version,
+          // das hier ist also ein Update und keine Erstinstallation.
+          if (fresh.state === "installed" && navigator.serviceWorker.controller) setUpdateReady(true);
+        });
+      });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!legalOpen) return;
@@ -192,6 +251,9 @@ function App() {
         </nav>
         <div class="sidebar-foot">
           <${SyncPill} status=${status} />
+          <button class="btn btn-ghost" style="justify-content:flex-start" onClick=${toggleTheme}>
+            <${darkActive ? IconSun : IconMoon} strokeWidth="2" /> ${darkActive ? "Helles Design" : "Dunkles Design"}
+          </button>
           <button class="btn btn-ghost" style="justify-content:flex-start" onClick=${() => sb.auth.signOut()}>
             <${IconLogOut} strokeWidth="2" /> Abmelden
           </button>
@@ -216,6 +278,10 @@ function App() {
               </div>
             `}
           </div>
+          <button class="btn btn-icon btn-ghost" onClick=${toggleTheme}
+            aria-label=${darkActive ? "Zum hellen Design wechseln" : "Zum dunklen Design wechseln"}>
+            <${darkActive ? IconSun : IconMoon} strokeWidth="2" />
+          </button>
           <button class="btn btn-icon btn-ghost" onClick=${() => sb.auth.signOut()} aria-label="Abmelden"><${IconLogOut} strokeWidth="2" /></button>
         </header>
 
@@ -236,6 +302,14 @@ function App() {
         </nav>
       </div>
 
+      ${updateReady && html`
+        <div class="update-banner">
+          <span>Eine neuere Version ist bereit.</span>
+          <button class="btn btn-sm btn-primary" onClick=${() => window.location.reload()}>Neu laden</button>
+          <button class="btn btn-sm btn-ghost" onClick=${() => setUpdateReady(false)} aria-label="Hinweis ausblenden"><${IconX} strokeWidth="2.4" /></button>
+        </div>
+      `}
+
       <div class="toast-stack">
         ${toasts.map((t) => html`
           <div class="toast ${t.type}" key=${t.id}>
@@ -251,9 +325,3 @@ function App() {
 }
 
 render(html`<${App} />`, document.getElementById("root"));
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  });
-}

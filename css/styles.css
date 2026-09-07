@@ -13,11 +13,22 @@
 @font-face{font-family:"Playfair Display";font-style:normal;font-weight:500;font-display:swap;src:url("../fonts/playfair-display-latin-500-normal.woff2") format("woff2");}
 @font-face{font-family:"Playfair Display";font-style:normal;font-weight:600;font-display:swap;src:url("../fonts/playfair-display-latin-600-normal.woff2") format("woff2");}
 
-:root{
+/* Das Theme wird von JS immer explizit als data-theme gesetzt (siehe das
+   kleine Skript im <head> von index.html, das noch vor dem ersten Zeichnen
+   läuft — sonst blitzt kurz das helle Design auf). "system" wird dort zu
+   light/dark aufgelöst, deshalb kommen die Farbtokens hier nur einmal vor
+   statt je einmal für die Media-Query und einmal für den Umschalter. */
+:root, :root[data-theme="light"]{
   color-scheme: light;
 
   /* --- Farbtokens --- */
   --bg:            #FBF7F1;
+  --bg-veil:       rgba(251,247,241,.92);
+  --chip-veil:     rgba(255,255,255,.82);
+  --chip-veil-solid: #FFFFFF;
+  --scrim:         rgba(34,30,25,.42);
+  --texture-a:     rgba(31,75,58,.05);
+  --texture-b:     rgba(192,83,42,.05);
   --paper:         #FFFFFF;
   --paper-soft:    #F5EFE4;
   --ink:           #221E19;
@@ -75,6 +86,57 @@
   --tag-8-soft: #DFE9EF;
 }
 
+/* Dunkles Design: warmer Nachtton statt neutralem Grau, damit der
+   "Küchenjournal"-Charakter erhalten bleibt. Die -dark-Varianten werden im
+   hellen Design als Textfarbe auf hellen Flächen benutzt — im dunklen
+   müssen sie deshalb HELLER sein als die Grundfarbe, nicht dunkler. */
+:root[data-theme="dark"]{
+  color-scheme: dark;
+
+  --bg:            #17150F;
+  --bg-veil:       rgba(23,21,15,.92);
+  --chip-veil:     rgba(32,29,22,.86);
+  --chip-veil-solid: #201D16;
+  --scrim:         rgba(0,0,0,.58);
+  --texture-a:     rgba(111,169,140,.05);
+  --texture-b:     rgba(226,129,79,.05);
+
+  --paper:         #201D16;
+  --paper-soft:    #2A2620;
+  --ink:           #F1EBE0;
+  --ink-soft:      #B5AC9D;
+  --ink-faint:     #877F71;
+  --border:        #332E26;
+  --border-strong: #473F34;
+
+  --primary:       #6FA98C;
+  --primary-dark:  #8FC4A8;
+  --primary-soft:  #223A30;
+  --primary-mist:  #1D2C25;
+
+  --accent:        #E2814F;
+  --accent-dark:   #EE9C6F;
+  --accent-soft:   #3A281D;
+
+  --danger:        #E0796B;
+  --danger-soft:   #3A211E;
+  --success:       #6BB58E;
+  --success-soft:  #1F3128;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 6px 20px -6px rgba(0,0,0,.55);
+  --shadow-lg: 0 16px 40px -12px rgba(0,0,0,.7);
+
+  --tag-1: #E0B268; --tag-1-soft: #38301F;
+  --tag-2: #E2814F; --tag-2-soft: #3A281D;
+  --tag-3: #7FBA9B; --tag-3-soft: #22352C;
+  --tag-4: #C3B45A; --tag-4-soft: #33301B;
+  --tag-5: #D08BA0; --tag-5-soft: #37262C;
+  --tag-6: #C79A72; --tag-6-soft: #33281F;
+  --tag-7: #ADA396; --tag-7-soft: #2E2A24;
+  --tag-8: #7FADCA; --tag-8-soft: #212D36;
+}
+
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
@@ -100,8 +162,8 @@ ul,ol{margin:0;padding:0;list-style:none}
 /* subtle warm paper texture */
 body{
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(31,75,58,.05), transparent 42%),
-    radial-gradient(circle at 88% 92%, rgba(192,83,42,.05), transparent 46%);
+    radial-gradient(circle at 12% 8%, var(--texture-a), transparent 42%),
+    radial-gradient(circle at 88% 92%, var(--texture-b), transparent 46%);
   background-attachment: fixed;
 }
 
@@ -145,7 +207,7 @@ body{
   position:sticky;top:0;z-index:20;
   display:flex;align-items:center;gap:12px;
   padding:12px 16px;
-  background: rgba(251,247,241,.92);
+  background: var(--bg-veil);
   backdrop-filter: blur(8px);
   border-bottom:1px solid var(--border);
   min-height:var(--header-h);
@@ -380,6 +442,24 @@ input[type="checkbox"].check:checked::after{
 .spinner-page{display:flex;align-items:center;justify-content:center;min-height:60vh}
 
 /* ============================================================
+   Update-Hinweis (neue Version im Service Worker bereit)
+   ============================================================ */
+.update-banner{
+  position:fixed;left:16px;right:16px;bottom:calc(var(--tabbar-h) + 14px);z-index:85;
+  display:flex;align-items:center;gap:10px;
+  margin:0 auto;max-width:440px;
+  background:var(--primary);color:#fff;
+  padding:10px 10px 10px 16px;border-radius:var(--radius-pill);
+  font-size:13.5px;font-weight:500;box-shadow:var(--shadow-lg);
+}
+.update-banner span{flex:1}
+.update-banner .btn-primary{background:#fff;color:var(--primary-dark)}
+.update-banner .btn-primary:hover{background:#fff;opacity:.9}
+.update-banner .btn-ghost{color:#fff;padding:6px}
+.update-banner .btn-ghost:hover{background:rgba(255,255,255,.15)}
+@media (min-width:960px){.update-banner{bottom:20px}}
+
+/* ============================================================
    Toast
    ============================================================ */
 .toast-stack{position:fixed;left:0;right:0;bottom:calc(var(--tabbar-h) + 14px);z-index:80;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;padding:0 16px}
@@ -401,7 +481,7 @@ input[type="checkbox"].check:checked::after{
    ============================================================ */
 .overlay{
   position:fixed;inset:0;z-index:60;
-  background:rgba(34,30,25,.42);
+  background:var(--scrim);
   display:flex;align-items:flex-end;justify-content:center;
   padding:0;
   animation:fade-in .16s ease;
@@ -469,6 +549,29 @@ input[type="checkbox"].check:checked::after{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;
 }
 @media (min-width:640px){.recipe-grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}}
+/* Platz für den schwebenden +-Button, der sonst die letzte Kartenreihe überdeckt. */
+@media (max-width:959px){.recipe-grid,.recipes-empty{padding-bottom:64px}}
+
+/* Der Favoriten-Knopf liegt über der Karte statt in ihr: Die Karte ist
+   selbst ein Button, und ein Button im Button ist ungültiges HTML. */
+.recipe-card-wrap{position:relative;display:flex}
+.recipe-card-wrap > .recipe-card{flex:1;min-width:0}
+.fav-btn{
+  position:absolute;top:8px;right:8px;z-index:2;
+  width:32px;height:32px;border-radius:99px;border:none;padding:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:var(--chip-veil);color:var(--ink-faint);
+  box-shadow:var(--shadow-sm);transition:color .15s ease, background .15s ease;
+}
+.fav-btn svg{width:17px;height:17px}
+.fav-btn:hover{background:var(--chip-veil-solid);color:var(--accent)}
+.fav-btn.on{color:var(--accent)}
+.fav-btn.on svg{fill:currentColor}
+.fav-icon.on{color:var(--accent)}
+.fav-icon.on svg{fill:currentColor}
+.cat-pill.fav-pill{display:inline-flex;align-items:center;gap:5px}
+.cat-pill.fav-pill svg{width:14px;height:14px}
+.cat-pill.fav-pill.active svg{fill:currentColor}
 
 .recipe-card{
   display:flex;flex-direction:column;
@@ -492,6 +595,12 @@ input[type="checkbox"].check:checked::after{
 .recipe-detail-photo{width:100%;aspect-ratio:16/10;border-radius:var(--radius-md);background:var(--primary-mist);overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
 .recipe-detail-photo img{width:100%;height:100%;object-fit:cover}
 .recipe-detail-photo svg{width:42px;height:42px;color:var(--primary);opacity:.4}
+/* Ohne Foto schob der Platzhalter im Bildformat die Zutaten weit nach unten —
+   ohne dass es etwas zu sehen gäbe. Dann reicht ein schmaler Streifen. */
+.recipe-detail-photo.empty{aspect-ratio:auto;height:76px}
+.recipe-detail-photo.empty svg{width:26px;height:26px}
+.recipe-thumb.empty{aspect-ratio:16/6}
+.recipe-thumb.empty svg{width:22px;height:22px}
 .recipe-meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .meta-tile{display:flex;flex-direction:column;gap:2px;background:var(--paper-soft);border-radius:var(--radius-sm);padding:9px 14px;flex:1;min-width:88px}
 .meta-tile .n{font-weight:700;font-size:15px}
@@ -513,7 +622,24 @@ input[type="checkbox"].check:checked::after{
 .step-edit-row .step-num{margin-top:9px}
 .step-edit-row textarea{flex:1;min-height:56px;resize:vertical}
 
-.ing-edit-row{display:grid;grid-template-columns:1fr 74px 96px;gap:8px;align-items:center;margin-bottom:16px;position:relative}
+.ing-edit-row{display:grid;grid-template-columns:1fr 74px 96px 24px;gap:8px;align-items:center;margin-bottom:16px;position:relative}
+
+/* Reihenfolge ändern: zwei schmale Pfeile, gestapelt, damit sie in der
+   Zutatenzeile kaum Breite kosten. */
+/* Nebenaktionen (Teilen, Drucken) nur als Symbol — mit Beschriftung stünden
+   in der Knopfleiste fünf Textknöpfe und schöben die Zutaten weit nach unten. */
+.btn-icon-sm{padding-left:9px;padding-right:9px}
+.btn-icon-sm svg{margin:0}
+
+.reorder{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.reorder button{
+  width:24px;height:18px;padding:0;border:none;background:none;cursor:pointer;
+  color:var(--ink-faint);display:flex;align-items:center;justify-content:center;border-radius:5px;
+}
+.reorder button svg{width:13px;height:13px}
+.reorder button:hover:not(:disabled){color:var(--primary);background:var(--primary-soft)}
+.reorder button:disabled{opacity:.28;cursor:default}
+.step-edit-row .reorder{margin-top:6px}
 .ing-row-remove{
   position:absolute;top:-10px;right:-8px;z-index:1;
   width:22px;height:22px;border-radius:99px;padding:0;
@@ -523,7 +649,8 @@ input[type="checkbox"].check:checked::after{
 }
 .ing-row-remove svg{width:12px;height:12px}
 @media (max-width:479px){
-  .ing-edit-row{grid-template-columns:1fr 56px 84px;gap:5px;margin-bottom:18px}
+  .ing-edit-row{grid-template-columns:1fr 56px 84px 22px;gap:5px;margin-bottom:18px}
+  .reorder button{width:22px}
   .ing-edit-row input,.ing-edit-row select{padding-left:7px;padding-right:7px;font-size:13.5px}
   .ing-edit-row select{padding-right:20px;background-position:right 5px center;background-size:12px}
   .ing-row-remove{width:20px;height:20px;top:-9px;right:-6px}
@@ -631,12 +758,30 @@ input[type="checkbox"].check:checked::after{
 .add-item-form .input[type=number]{flex:1;min-width:70px}
 .add-item-form .input[type=date]{flex:1;min-width:150px;color:var(--ink-soft)}
 .add-item-form .select{flex:1;min-width:90px}
+/* Beschriftetes Feld im Formular: Ein nacktes Datumsfeld zeigt nur "TT.MM.JJJJ"
+   und verrät nicht, wofür das Datum steht. */
+.add-item-form .field-inline{flex:1;min-width:150px;display:flex;flex-direction:column;gap:3px}
+.add-item-form .field-inline > span{font-size:11.5px;font-weight:600;color:var(--ink-faint);padding-left:2px}
+.add-item-form .field-inline .input[type=date]{flex:none;min-width:0;width:100%}
 @media (max-width:479px){
   .add-item-form .input:not([type=number]){flex-basis:100%}
   .add-item-form .input[type=number]{min-width:0}
   .add-item-form .select.select-location{flex-basis:100%}
+  .add-item-form .field-inline{flex-basis:100%}
   .add-item-form .btn{flex:1}
 }
+
+/* ============================================================
+   Wochenauswahl im Wochenplan
+   ============================================================ */
+.week-picker{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.week-picker .btn-icon{flex-shrink:0;font-size:20px;font-weight:600;line-height:1;color:var(--ink-soft)}
+.week-picker-label{flex:1;text-align:center;display:flex;flex-direction:column;gap:1px;min-width:0}
+.week-picker-label b{font-size:15px;color:var(--primary-dark)}
+.week-picker-label span{font-size:12.5px;color:var(--ink-faint)}
+.week-heading{display:flex;flex-direction:column;gap:1px;margin-bottom:16px}
+.week-heading b{font-family:var(--font-display);font-size:19px;color:var(--primary-dark)}
+.week-heading span{font-size:13px;color:var(--ink-faint)}
 
 .shop-group{margin-bottom:22px}
 .shop-group-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -664,10 +809,33 @@ input[type="checkbox"].check:checked::after{
 .print-only{display:none}
 @media print{
   .sidebar,.tabbar,.topbar,.fab,.filter-bar,.add-item-form,.shop-item-actions,.toast-stack,.desktop-header .btn,.shop-actions{display:none !important}
+  /* Auf Papier immer helle Farben — im dunklen Design stünde sonst heller
+     Text auf weißem Grund und das Blatt käme praktisch leer aus dem Drucker. */
+  :root, :root[data-theme="dark"]{
+    color-scheme: light;
+    --bg:#fff; --paper:#fff; --paper-soft:#fff;
+    --ink:#000; --ink-soft:#333; --ink-faint:#555;
+    --border:#ddd; --border-strong:#bbb;
+    --primary:#000; --primary-dark:#000; --primary-soft:#fff; --primary-mist:#fff;
+    --accent:#000; --accent-dark:#000; --accent-soft:#fff;
+    --scrim:transparent; --texture-a:transparent; --texture-b:transparent;
+    --shadow-sm:none; --shadow-md:none; --shadow-lg:none;
+  }
   body{background:#fff}
   .view-container{padding:0;max-width:none}
   .shop-item{border:none;border-bottom:1px solid #ddd;border-radius:0;padding:8px 0}
   .print-only{display:block}
+
+  /* Rezept drucken: Der Dialog IST die Seite — Hintergrund weg, Kopfzeile
+     und Bedienknöpfe raus, kein Höhenlimit, damit nichts abgeschnitten wird. */
+  .overlay{position:static;display:block;background:none;padding:0;animation:none}
+  .sheet{max-height:none;border-radius:0;box-shadow:none;animation:none;background:#fff}
+  .sheet-header,.sheet-foot,.recipe-detail-photo.empty,.import-box{display:none !important}
+  .sheet-body{overflow:visible !important;padding:0 !important}
+  .recipe-detail-photo{page-break-inside:avoid}
+  .step-row,.ingredient-row{page-break-inside:avoid}
+  /* Die Knopfleiste über den Kennzahlen (Teilen/Drucken/Kochmodus …) */
+  .sheet-body .btn{display:none !important}
 }
 
 .shop-actions{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}

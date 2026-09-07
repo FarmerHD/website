@@ -50,7 +50,7 @@ function PantryItemRow({ item, onSave, onDelete }) {
           <select class="select" style="flex:1;min-width:110px" value=${draft.location} onChange=${(e) => setDraft({ ...draft, location: e.target.value })}>
             ${PANTRY_LOCATIONS.map((l) => html`<option value=${l}>${l}</option>`)}
           </select>
-          <input class="input" type="date" style="flex:1;min-width:130px" value=${draft.expires_at} onInput=${(e) => setDraft({ ...draft, expires_at: e.target.value })} />
+          <input class="input" type="date" aria-label="Haltbar bis" style="flex:1;min-width:130px" value=${draft.expires_at} onInput=${(e) => setDraft({ ...draft, expires_at: e.target.value })} />
         </div>
         <div class="shop-item-actions">
           <button class="btn btn-icon btn-ghost" onClick=${() => { onSave(item.id, { name: draft.name.trim() || item.name, amount: Number(draft.amount) || 0, unit: draft.unit, location: draft.location, expires_at: draft.expires_at || null }); setEditing(false); }} aria-label="Speichern"><${IconCheck} strokeWidth="2.4" /></button>
@@ -139,7 +139,10 @@ export function PantryView({ pantryItems: items, onPantryChange: onChange, showT
         <select class="select select-location" value=${addForm.location} onChange=${(e) => setAddForm({ ...addForm, location: e.target.value })}>
           ${PANTRY_LOCATIONS.map((l) => html`<option value=${l}>${l}</option>`)}
         </select>
-        <input class="input" type="date" title="Mindesthaltbarkeit (optional)" value=${addForm.expires_at} onInput=${(e) => setAddForm({ ...addForm, expires_at: e.target.value })} />
+        <label class="field-inline">
+          <span>Haltbar bis (optional)</span>
+          <input class="input" type="date" value=${addForm.expires_at} onInput=${(e) => setAddForm({ ...addForm, expires_at: e.target.value })} />
+        </label>
         <button class="btn btn-primary" type="submit"><${IconPlus} strokeWidth="2.4" /> Hinzufügen</button>
       </form>
 

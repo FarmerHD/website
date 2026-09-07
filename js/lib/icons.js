@@ -14,6 +14,12 @@ export const IconBook = wrap(() => html`<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20
 export const IconCalendar = wrap(() => html`<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 9.5h18"/>`);
 export const IconCart = wrap(() => html`<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.2l2.2 12.1a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.6L21 7H6"/>`);
 export const IconSearch = wrap(() => html`<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>`);
+export const IconHeart = wrap(() => html`<path d="M12 20.5 3.9 12.6a5 5 0 0 1 7.1-7.1l1 1 1-1a5 5 0 0 1 7.1 7.1Z"/>`);
+export const IconSun = wrap(() => html`<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>`);
+export const IconMoon = wrap(() => html`<path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5a8.5 8.5 0 1 0 10.8 10.8Z"/>`);
+export const IconShare = wrap(() => html`<path d="M12 15V3"/><path d="m8 6.5 4-3.5 4 3.5"/><path d="M4 13v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>`);
+export const IconArrowUp = wrap(() => html`<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>`);
+export const IconArrowDown = wrap(() => html`<path d="M12 5v14"/><path d="m5.5 12.5 6.5 6.5 6.5-6.5"/>`);
 export const IconPlus = wrap(() => html`<path d="M12 5v14M5 12h14"/>`);
 export const IconX = wrap(() => html`<path d="M18 6 6 18M6 6l12 12"/>`);
 export const IconEdit = wrap(() => html`<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>`);
