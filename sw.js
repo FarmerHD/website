@@ -6,7 +6,7 @@
 // WICHTIG: Bei jedem Release hochzählen. Der Name ist der Cache-Schlüssel —
 // bleibt er gleich, behalten bereits installierte Geräte ihre alten Dateien,
 // und Korrekturen kommen bei den Nutzern nicht an.
-const CACHE_VERSION = "mr-v2";
+const CACHE_VERSION = "mr-v3";
 const APP_SHELL = [
   "./",
   "index.html",

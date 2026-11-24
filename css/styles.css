@@ -735,12 +735,57 @@ input[type="checkbox"].check:checked::after{
   .plan-row-controls{flex-basis:100%;justify-content:space-between;margin-top:4px}
 }
 .plan-weekday-select{width:auto;min-width:132px;padding-top:8px;padding-bottom:8px;font-size:13.5px}
-.plan-mode-tabs{max-width:300px}
+.plan-mode-tabs{max-width:400px}
 .plan-week-view{background:var(--paper);border:1px solid var(--border);border-radius:var(--radius-md);padding:6px 18px;box-shadow:var(--shadow-sm)}
 .plan-week-view .plan-day-row{padding:14px 0}
 .plan-week-view .plan-day-label{width:110px;font-family:var(--font-display);font-size:16px;color:var(--primary-dark);padding-top:2px}
 .plan-week-view .plan-day-items{gap:8px}
 .plan-view-chip{background:var(--primary-mist);font-size:14px;padding:8px 14px}
+
+/* Fertige Woche: Rezepte verschieben (Ziehen am Griff oder Tagesauswahl) */
+.plan-move-hint{margin:-4px 0 12px}
+.week-picker-view{margin-bottom:12px}
+.week-picker-view .week-heading{flex:1;text-align:center;margin-bottom:0}
+.week-picker-view .btn-icon:disabled{opacity:.3}
+.plan-week-view .plan-day-label small{display:block;font-family:var(--font-ui);font-size:12px;font-weight:500;color:var(--ink-faint);margin-top:2px}
+.plan-week-view .plan-day-row.is-today .plan-day-label small{color:var(--accent-dark);font-weight:700}
+.plan-week-view .plan-day-row{border-radius:var(--radius-sm);transition:background-color .12s}
+.plan-week-view .plan-day-row.is-over{background:var(--primary-mist);outline:2px dashed var(--primary);outline-offset:-2px}
+.plan-item{display:flex;flex-direction:column;background:var(--primary-mist);border:1px solid var(--border);border-radius:var(--radius-sm);max-width:100%}
+.plan-item.is-dragging{opacity:.35}
+.plan-item.is-over{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+.plan-item-row{display:flex;align-items:center;min-height:44px}
+.plan-item-handle{display:flex;align-items:center;justify-content:center;width:36px;align-self:stretch;flex-shrink:0;border:none;background:none;color:var(--ink-faint);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.plan-item-handle svg{width:18px;height:18px}
+.plan-item-handle:hover{color:var(--primary-dark);background:var(--primary-soft)}
+.plan-item-name{display:flex;align-items:baseline;gap:8px;min-width:0;border:none;background:none;padding:8px 14px 8px 2px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer;text-align:left}
+.plan-item-name .n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.plan-item-name .p{color:var(--ink-soft);font-size:12.5px;flex-shrink:0}
+.plan-move{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
+.plan-move-btn{min-width:44px;min-height:40px;padding:0 10px;border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:var(--paper);color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.plan-move-btn:hover:not(:disabled){border-color:var(--primary)}
+.plan-move-btn.on{background:var(--primary);border-color:var(--primary);color:#fff;cursor:default}
+.plan-move-btn.wide{padding:0 14px}
+.plan-drag-ghost{position:fixed;left:0;top:0;z-index:1000;pointer-events:none;background:var(--paper);border-color:var(--primary);box-shadow:var(--shadow-lg);opacity:.96}
+body.plan-dragging, body.plan-dragging *{cursor:grabbing !important;-webkit-user-select:none;user-select:none}
+@media (max-width:639px){
+  .plan-week-view{padding:6px 12px}
+  .plan-week-view .plan-day-label{width:94px;font-size:14.5px}
+  .plan-week-view .plan-day-row{gap:8px}
+}
+
+/* Verlauf vergangener Wochen */
+.plan-history{display:flex;flex-direction:column;gap:14px;max-width:720px}
+.plan-history-top .plan-history-line:first-of-type{border-top:none}
+.plan-history-week{padding:6px 18px 10px}
+.plan-history-head{display:flex;flex-direction:column;gap:1px;padding:12px 0 8px;border-bottom:1px solid var(--border)}
+.plan-history-head b{font-family:var(--font-display);font-size:17px;color:var(--primary-dark)}
+.plan-history-head span{font-size:12.5px;color:var(--ink-faint)}
+.plan-history-line{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-top:1px dashed var(--border);font-size:14px}
+.plan-history-head + .plan-history-line{border-top:none}
+.plan-history-line .d{width:62px;flex-shrink:0;font-weight:600;font-size:13px;color:var(--ink-soft);white-space:nowrap}
+.plan-history-line .n{flex:1;min-width:0;font-weight:500}
+.plan-history-line .m{flex-shrink:0;color:var(--ink-faint);font-size:13px}
 
 /* ============================================================
    Einkaufsliste

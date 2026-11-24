@@ -14,6 +14,9 @@ gehostet über GitHub Pages, Daten liegen in Supabase.
 - **Wochenplan** — Rezepte auswählen, Portionen unabhängig von der
   Basis-Portionenzahl anpassen, daraus mit einem Klick die Einkaufsliste
   erstellen (Mengen werden im Verhältnis hochgerechnet).
+  In der fertigen Woche („Ansicht“) lassen sich Rezepte per Drag and Drop
+  (Maus und Touch) oder Antippen auf andere Tage verschieben; „Verlauf“
+  zeigt die vergangenen Wochen und die am häufigsten geplanten Rezepte.
 - **Einkaufsliste** — automatische Zuordnung zu Warengruppen (Fleisch &
   Fisch, Milchprodukte, Gemüse & Obst, Gewürze & Öle, Trockenware,
   Konserven, Extras), gleiche Artikel werden zusammengeführt (inkl.
